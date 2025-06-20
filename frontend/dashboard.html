@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - ByteBite</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <header class="dashboard-header">
+        <div class="header-left">
+            <img src="images/logo.png" alt="ByteBite Logo" class="logo">
+        </div>
+        <div class="header-right">
+            <span class="user-greeting">Hello, <span id="username-display"></span></span>
+            <button id="logoutButton" class="btn">Logout</button>
+        </div>
+    </header>
+
+    <div class="dashboard-content">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <h3>Dashboard</h3>
+            <ul>
+                <li><a href="#" class="sidebar-link" data-tab="inventory-tab">Inventory</a></li>
+                <li><a href="#" class="sidebar-link" data-tab="distribution-tab">Distribution Plan</a></li>
+                <li><a href="#" class="sidebar-link" data-tab="add-stock-tab">Add Stock</a></li>
+                <li><a href="#" class="sidebar-link" data-tab="prediction-tab">Visitor Prediction</a></li>
+            </ul>
+        </aside>
+
+        <main style="flex:1;">
+            <!-- Summary Widgets -->
+            <div class="summary-widgets">
+                <div class="widget">
+                    <div class="widget-title">Total Items</div>
+                    <div class="widget-value" id="widget-total-items">-</div>
+                </div>
+                <div class="widget">
+                    <div class="widget-title">Expiring Soon</div>
+                    <div class="widget-value" id="widget-expiring-soon">-</div>
+                </div>
+                <div class="widget">
+                    <div class="widget-title">Weekly Visitors</div>
+                    <div class="widget-value" id="widget-weekly-visitors">-</div>
+                </div>
+            </div>
+
+            <!-- Tab Navigation -->
+            <div class="tabs">
+                <div class="tab active" data-tab="inventory-tab">Inventory</div>
+                <div class="tab" data-tab="distribution-tab">Distribution Plan</div>
+                <div class="tab" data-tab="add-stock-tab">Add Stock</div>
+                <div class="tab" data-tab="prediction-tab">Visitor Prediction</div>
+            </div>
+
+            <!-- Tab Contents -->
+            <div class="tab-content" id="inventory-tab">
+                <section id="inventory" class="full-width">
+                    <h2>Current Stock</h2>
+                    <table id="inventory-table">
+                        <thead>
+                            <tr>
+                                <th>Food Item</th>
+                                <th>Type of Food</th>
+                                <th>Quantity Available</th>
+                                <th>Expiration Date</th>
+                                <th>Days Until Expiry</th>
+                                <th>Calories/Serving</th>
+                                <th>Sugars/Serving</th>
+                                <th>Weekly Customers</th>
+                                <th>Nutritional Ratio</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inventory-body">
+                            <!-- Inventory rows will be inserted dynamically -->
+                        </tbody>
+                    </table>
+                </section>
+            </div>
+
+            <div class="tab-content" id="distribution-tab" style="display:none;">
+                <section id="distribution-plan">
+                    <h2>Distribution Plan</h2>
+                    <button id="refresh-distribution" class="btn">Refresh Distribution Plan</button>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Food Item</th>
+                                <th>Current Quantity</th>
+                                <th>Recommended Quantity</th>
+                                <th>Priority Score</th>
+                                <th>Rank</th>
+                            </tr>
+                        </thead>
+                        <tbody id="distribution-plan-body">
+                            <!-- Distribution plan rows will be inserted here -->
+                        </tbody>
+                    </table>
+                </section>
+            </div>
+
+            <div class="tab-content" id="add-stock-tab" style="display:none;">
+                <section id="add-stock">
+                    <h2>Add New Stock</h2>
+                    <form id="add-stock-form">
+                        <div class="autocomplete-container">
+                            <input type="text" id="food-type" placeholder="Food Item Name" required>
+                            <div id="suggestions-list" class="suggestions"></div>
+                        </div>
+                        <select id="food-category" required>
+                            <option value="">Select Food Category</option>
+                            <option value="Snacks">Snacks</option>
+                            <option value="Protein">Protein</option>
+                            <option value="Vegetables">Vegetables</option>
+                            <option value="Grain">Grain</option>
+                            <option value="Dairy">Dairy</option>
+                            <option value="Canned Goods">Canned Goods</option>
+                        </select>
+                        <input type="number" id="quantity" placeholder="Quantity" required>
+                        <input type="date" id="expiration-date" required>
+                        <button type="submit">Add Stock</button>
+                    </form>
+                    <div class="weekly-customers-container">
+                        <h3>Weekly Customer Count</h3>
+                        <div class="form-group">
+                            <label for="weekly-customers">Number of Weekly Customers:</label>
+                            <input type="number" id="weekly-customers" min="0" value="100">
+                            <button id="update-customers" class="btn">Update</button>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <div class="tab-content" id="prediction-tab" style="display:none;">
+                <!-- Visitor Prediction Section -->
+                <section id="visitor-prediction" class="full-width">
+                    <h2>Visitor Prediction</h2>
+                    <div class="prediction-controls">
+                        <label for="agency-select">Select Foodbank:</label>
+                        <select id="agency-select"></select>
+                        <label for="prediction-date">Date:</label>
+                        <input type="date" id="prediction-date">
+                        <button id="get-prediction" class="btn">Get Prediction</button>
+                    </div>
+                    <div id="prediction-result"></div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <script type="module" src="js/auth.js"></script>
+    <script type="module" src="js/dashboard.js"></script>
+</body>
+</html>
