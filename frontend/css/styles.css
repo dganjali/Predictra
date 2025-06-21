@@ -228,14 +228,12 @@ a:hover {
 }
 
 .btn-social {
-    background-color: var(--bg-secondary);
-    color: var(--text-primary);
+    background-color: var(--bg-primary);
     border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
     justify-content: center;
-}
-
-.btn-social:hover {
-    background-color: var(--bg-tertiary);
 }
 
 .btn-google {
@@ -690,29 +688,6 @@ a:hover {
 
 .forgot-password:hover {
     text-decoration: underline;
-}
-
-.auth-divider {
-    text-align: center;
-    margin: 2rem 0;
-    position: relative;
-}
-
-.auth-divider::before {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: var(--border-color);
-}
-
-.auth-divider span {
-    background: var(--bg-primary);
-    padding: 0 1rem;
-    color: var(--text-light);
-    font-size: 0.875rem;
 }
 
 .auth-footer {

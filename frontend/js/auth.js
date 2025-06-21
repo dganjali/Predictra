@@ -25,6 +25,46 @@ function initAuth() {
     initPasswordStrength();
 }
 
+// Simple email validation function
+function validateEmail(email) {
+    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return re.test(email);
+}
+
+// Simple password validation function
+function validatePassword(password) {
+    const minLength = 6;
+    const hasUpperCase = /[A-Z]/.test(password);
+    const hasLowerCase = /[a-z]/.test(password);
+    const hasNumbers = /\d/.test(password);
+    const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+    
+    let strength = 0;
+    let feedback = [];
+    
+    if (password.length >= minLength) strength++;
+    else feedback.push(`At least ${minLength} characters`);
+    
+    if (hasUpperCase) strength++;
+    else feedback.push('One uppercase letter');
+    
+    if (hasLowerCase) strength++;
+    else feedback.push('One lowercase letter');
+    
+    if (hasNumbers) strength++;
+    else feedback.push('One number');
+    
+    if (hasSpecialChar) strength++;
+    else feedback.push('One special character');
+    
+    return {
+        strength: strength,
+        maxStrength: 5,
+        feedback: feedback,
+        isValid: strength >= 3
+    };
+}
+
 function initSignIn(form) {
     form.addEventListener('submit', async function(e) {
         e.preventDefault();
@@ -115,7 +155,6 @@ function initSignUp(form) {
         const firstName = formData.get('firstName');
         const lastName = formData.get('lastName');
         const email = formData.get('email');
-        const company = formData.get('company');
         const password = formData.get('password');
         const confirmPassword = formData.get('confirmPassword');
         const termsAccepted = formData.get('termsAccepted') === 'on';
@@ -139,7 +178,6 @@ function initSignUp(form) {
                     firstName: firstName,
                     lastName: lastName,
                     email: email,
-                    company: company,
                     password: password
                 })
             });
@@ -195,7 +233,7 @@ function validateSignInForm(email, password) {
     if (!email || !email.trim()) {
         showError('email', 'Email is required');
         isValid = false;
-    } else if (!window.authUtils || !window.authUtils.validateEmail(email)) {
+    } else if (!validateEmail(email)) {
         showError('email', 'Please enter a valid email address');
         isValid = false;
     }
@@ -234,7 +272,7 @@ function validateSignUpForm(firstName, lastName, email, password, confirmPasswor
     if (!email || !email.trim()) {
         showError('email', 'Email is required');
         isValid = false;
-    } else if (!window.authUtils || !window.authUtils.validateEmail(email)) {
+    } else if (!validateEmail(email)) {
         showError('email', 'Please enter a valid email address');
         isValid = false;
     }
@@ -243,11 +281,8 @@ function validateSignUpForm(firstName, lastName, email, password, confirmPasswor
     if (!password || !password.trim()) {
         showError('password', 'Password is required');
         isValid = false;
-    } else if (password.length < 6) {
-        showError('password', 'Password must be at least 6 characters');
-        isValid = false;
-    } else if (window.authUtils) {
-        const passwordValidation = window.authUtils.validatePassword(password);
+    } else {
+        const passwordValidation = validatePassword(password);
         if (!passwordValidation.isValid) {
             showError('password', 'Password is too weak. Please include uppercase, lowercase, numbers, and special characters.');
             isValid = false;
@@ -307,25 +342,23 @@ function initPasswordStrength() {
                 return;
             }
             
-            if (window.authUtils) {
-                const validation = window.authUtils.validatePassword(password);
-                const percentage = (validation.strength / validation.maxStrength) * 100;
-                
-                strengthFill.style.width = percentage + '%';
-                
-                if (validation.strength <= 1) {
-                    strengthFill.className = 'strength-fill weak';
-                    strengthText.textContent = 'Weak';
-                } else if (validation.strength <= 2) {
-                    strengthFill.className = 'strength-fill fair';
-                    strengthText.textContent = 'Fair';
-                } else if (validation.strength <= 3) {
-                    strengthFill.className = 'strength-fill good';
-                    strengthText.textContent = 'Good';
-                } else {
-                    strengthFill.className = 'strength-fill strong';
-                    strengthText.textContent = 'Strong';
-                }
+            const validation = validatePassword(password);
+            const percentage = (validation.strength / validation.maxStrength) * 100;
+            
+            strengthFill.style.width = percentage + '%';
+            
+            if (validation.strength <= 1) {
+                strengthFill.className = 'strength-fill weak';
+                strengthText.textContent = 'Weak';
+            } else if (validation.strength <= 2) {
+                strengthFill.className = 'strength-fill fair';
+                strengthText.textContent = 'Fair';
+            } else if (validation.strength <= 3) {
+                strengthFill.className = 'strength-fill good';
+                strengthText.textContent = 'Good';
+            } else {
+                strengthFill.className = 'strength-fill strong';
+                strengthText.textContent = 'Strong';
             }
         });
     }
@@ -356,7 +389,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (emailInput) {
             emailInput.addEventListener('blur', function() {
                 const email = this.value.trim();
-                if (email && window.authUtils && !window.authUtils.validateEmail(email)) {
+                if (email && !validateEmail(email)) {
                     showError('email', 'Please enter a valid email address');
                 } else {
                     clearFieldError('email');

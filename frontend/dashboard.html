@@ -11,21 +11,20 @@
     <nav class="navbar">
         <div class="nav-container">
             <div class="nav-logo">
-                <i class="fas fa-cogs"></i>
-                <span>PredictiveMaintenance</span>
+                <a href="/" style="text-decoration: none; color: inherit; display: flex; align-items: center; gap: 0.5rem;">
+                    <i class="fas fa-cogs"></i>
+                    <span>PredictiveMaintenance</span>
+                </a>
             </div>
             <ul class="nav-menu">
                 <li class="nav-item">
-                    <a href="/dashboard" class="nav-link active">Dashboard</a>
+                    <a href="index.html" class="nav-link">Home</a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link">Machines</a>
+                    <a href="about.html" class="nav-link">About</a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link">Analytics</a>
-                </li>
-                <li class="nav-item">
-                    <a href="#" class="nav-link">Settings</a>
+                    <a href="#" class="nav-link active">Dashboard</a>
                 </li>
                 <li class="nav-item">
                     <button id="logoutBtn" class="nav-link btn-secondary">Logout</button>
@@ -41,40 +40,156 @@
 
     <main class="dashboard-main">
         <div class="dashboard-container">
-            <div class="dashboard-header">
-                <h1>Welcome to Your Dashboard</h1>
-                <p>Monitor your machinery health and predictive maintenance insights</p>
-            </div>
+            <header class="dashboard-header">
+                <div class="header-content">
+                    <h1>Predictive Maintenance Dashboard</h1>
+                    <p>Welcome back, <span id="userName">User</span>! Here's your equipment overview.</p>
+                </div>
+                <div class="header-actions">
+                    <button class="btn btn-primary" id="addMachineBtn">
+                        <i class="fas fa-plus"></i>
+                        Add Machine
+                    </button>
+                </div>
+            </header>
 
-            <div class="dashboard-content">
-                <div class="dashboard-placeholder">
-                    <div class="placeholder-icon">
-                        <i class="fas fa-tools"></i>
+            <div class="dashboard-grid">
+                <!-- Overview Cards -->
+                <div class="dashboard-section">
+                    <h2>Overview</h2>
+                    <div class="overview-cards">
+                        <div class="overview-card">
+                            <div class="card-icon">
+                                <i class="fas fa-cogs"></i>
+                            </div>
+                            <div class="card-content">
+                                <h3 id="totalMachines">0</h3>
+                                <p>Total Machines</p>
+                            </div>
+                        </div>
+                        <div class="overview-card">
+                            <div class="card-icon warning">
+                                <i class="fas fa-exclamation-triangle"></i>
+                            </div>
+                            <div class="card-content">
+                                <h3 id="alertsCount">0</h3>
+                                <p>Active Alerts</p>
+                            </div>
+                        </div>
+                        <div class="overview-card">
+                            <div class="card-icon success">
+                                <i class="fas fa-check-circle"></i>
+                            </div>
+                            <div class="card-content">
+                                <h3 id="healthyMachines">0</h3>
+                                <p>Healthy Machines</p>
+                            </div>
+                        </div>
+                        <div class="overview-card">
+                            <div class="card-icon info">
+                                <i class="fas fa-clock"></i>
+                            </div>
+                            <div class="card-content">
+                                <h3 id="avgRUL">0</h3>
+                                <p>Avg RUL (days)</p>
+                            </div>
+                        </div>
                     </div>
-                    <h2>Dashboard Coming Soon</h2>
-                    <p>This is where your predictive maintenance dashboard will be implemented. The backend authentication system is ready, and you can now focus on building the actual RUL estimation models and dashboard functionality.</p>
-                    
-                    <div class="placeholder-features">
-                        <h3>What will be implemented:</h3>
-                        <ul>
-                            <li><i class="fas fa-chart-line"></i> Real-time machine monitoring</li>
-                            <li><i class="fas fa-brain"></i> AI-powered RUL estimation</li>
-                            <li><i class="fas fa-bell"></i> Predictive alerts and notifications</li>
-                            <li><i class="fas fa-database"></i> Machine metadata management</li>
-                            <li><i class="fas fa-chart-bar"></i> Analytics and reporting</li>
-                        </ul>
-                    </div>
+                </div>
 
-                    <div class="user-info">
-                        <h3>Current User Information:</h3>
-                        <div id="userInfo" class="user-details">
-                            <p>Loading user information...</p>
+                <!-- Machine List -->
+                <div class="dashboard-section">
+                    <div class="section-header">
+                        <h2>Equipment Status</h2>
+                        <div class="section-actions">
+                            <button class="btn btn-secondary" id="refreshBtn">
+                                <i class="fas fa-sync-alt"></i>
+                                Refresh
+                            </button>
+                        </div>
+                    </div>
+                    <div class="machine-list" id="machineList">
+                        <!-- Machines will be populated here -->
+                        <div class="no-machines">
+                            <i class="fas fa-cogs"></i>
+                            <h3>No machines added yet</h3>
+                            <p>Add your first machine to start monitoring</p>
+                            <button class="btn btn-primary" id="addFirstMachineBtn">
+                                <i class="fas fa-plus"></i>
+                                Add Machine
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Activity -->
+                <div class="dashboard-section">
+                    <h2>Recent Activity</h2>
+                    <div class="activity-list" id="activityList">
+                        <div class="activity-item">
+                            <div class="activity-icon">
+                                <i class="fas fa-info-circle"></i>
+                            </div>
+                            <div class="activity-content">
+                                <p>Welcome to your dashboard! Add machines to start monitoring.</p>
+                                <span class="activity-time">Just now</span>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
     </main>
+
+    <!-- Add Machine Modal -->
+    <div class="modal" id="addMachineModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Add New Machine</h2>
+                <button class="modal-close" id="closeModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="addMachineForm" class="modal-form">
+                <div class="form-group">
+                    <label for="machineName">Machine Name</label>
+                    <input type="text" id="machineName" name="machineName" required>
+                </div>
+                <div class="form-group">
+                    <label for="machineType">Machine Type</label>
+                    <select id="machineType" name="machineType" required>
+                        <option value="">Select machine type</option>
+                        <option value="pump">Pump</option>
+                        <option value="motor">Motor</option>
+                        <option value="compressor">Compressor</option>
+                        <option value="turbine">Turbine</option>
+                        <option value="conveyor">Conveyor</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="location">Location</label>
+                    <input type="text" id="location" name="location" required>
+                </div>
+                <div class="form-group">
+                    <label for="manufacturer">Manufacturer</label>
+                    <input type="text" id="manufacturer" name="manufacturer" required>
+                </div>
+                <div class="form-group">
+                    <label for="model">Model</label>
+                    <input type="text" id="model" name="model" required>
+                </div>
+                <div class="form-group">
+                    <label for="installationDate">Installation Date</label>
+                    <input type="date" id="installationDate" name="installationDate" required>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelAdd">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Machine</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <script src="js/dashboard.js"></script>
 </body>
