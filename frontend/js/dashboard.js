@@ -18,6 +18,9 @@ function checkDashboardAuth() {
         return;
     }
     
+    // Set user name from localStorage as fallback
+    setUserName(user);
+    
     // Verify token with server
     verifyToken(token);
 }
@@ -74,6 +77,16 @@ function displayUserInfo(user) {
             </div>
         `;
     }
+    
+    // Set user name in greeting
+    setUserName(user);
+}
+
+function setUserName(user) {
+    const userNameElement = document.getElementById('userName');
+    if (userNameElement && user) {
+        userNameElement.textContent = `${user.firstName} ${user.lastName}`;
+    }
 }
 
 function initDashboard() {
@@ -82,6 +95,9 @@ function initDashboard() {
     
     // Initialize dashboard navigation
     initDashboardNav();
+    
+    // Initialize hamburger menu
+    initHamburgerMenu();
     
     // Load dashboard data (placeholder for future implementation)
     loadDashboardData();
@@ -140,6 +156,27 @@ function initDashboardNav() {
             this.classList.add('active');
         });
     });
+}
+
+function initHamburgerMenu() {
+    const hamburger = document.querySelector('.hamburger');
+    const navMenu = document.querySelector('.nav-menu');
+    
+    if (hamburger && navMenu) {
+        hamburger.addEventListener('click', function() {
+            hamburger.classList.toggle('active');
+            navMenu.classList.toggle('active');
+        });
+        
+        // Close menu when clicking on a link
+        const navLinks = document.querySelectorAll('.nav-link');
+        navLinks.forEach(link => {
+            link.addEventListener('click', function() {
+                hamburger.classList.remove('active');
+                navMenu.classList.remove('active');
+            });
+        });
+    }
 }
 
 async function loadDashboardData() {

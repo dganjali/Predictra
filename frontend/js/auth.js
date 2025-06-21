@@ -124,7 +124,7 @@ function initSignIn(form) {
                 // Redirect to dashboard
                 setTimeout(() => {
                     window.location.href = '/dashboard';
-                }, 1000);
+                }, 500);
             } else {
                 // Show error message
                 showError('email', data.message || 'Sign in failed');
@@ -215,7 +215,7 @@ function initSignUp(form) {
                 // Redirect to dashboard
                 setTimeout(() => {
                     window.location.href = '/dashboard';
-                }, 1000);
+                }, 500);
             } else {
                 // Handle validation errors
                 if (data.errors && Array.isArray(data.errors)) {
