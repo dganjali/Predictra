@@ -253,6 +253,10 @@ function initAddMachineModal() {
             clearInterval(pollerId);
             pollerId = null;
         }
+        if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+        }
         document.getElementById('columnCheckboxes').innerHTML = '';
         document.getElementById('sensorConfigContainer').innerHTML = '';
         document.getElementById('finishBtn').style.display = 'none';

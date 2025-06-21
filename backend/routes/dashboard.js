@@ -652,4 +652,136 @@ function generatePlaceholderSensorData(machineId, hours) {
     return data;
 }
 
+function getModelPaths(userId, machineId) {
+    const machineDir = path.join(__dirname, '../models/user_models', `user_${userId}`, `machine_${machineId}`);
+    return {
+        model_file: path.join(machineDir, 'model.h5'),
+        scaler_file: path.join(machineDir, 'scaler.pkl'),
+        columns_file: path.join(machineDir, 'columns.json'),
+        threshold_file: path.join(machineDir, 'threshold.json'),
+    };
+}
+
+async function trainModel(machine, user) {
+    const machineId = machine._id.toString();
+    const userId = user._id.toString();
+    const filePath = machine.training_data_path;
+    let columns = machine.training_columns;
+    const TRAINING_ROW_LIMIT = 20000;
+
+    try {
+        await Machine.findByIdAndUpdate(machineId, { 
+            training_status: 'in_progress',
+            training_message: 'Preparing data for training...' 
+        });
+        
+        if (!fs.existsSync(filePath)) {
+            throw new Error(`Training file not found at path: ${filePath}`);
+        }
+        
+        const modelsDir = path.join(__dirname, '../models/user_models');
+        const userDir = path.join(modelsDir, `user_${userId}`);
+        const machineDir = path.join(userDir, `machine_${machineId}`);
+        
+        fs.mkdirSync(modelsDir, { recursive: true });
+        fs.mkdirSync(userDir, { recursive: true });
+        fs.mkdirSync(machineDir, { recursive: true });
+        
+        const data = fs.readFileSync(filePath, 'utf8');
+        const lines = data.split(/\\r?\\n/);
+        if (lines.length < 2) {
+            throw new Error('CSV file has insufficient data (less than 2 lines)');
+        }
+        
+        const header = lines[0];
+        const fileColumns = header.split(/,|;/).map(c => c.trim());
+        
+        const timestampSynonyms = ['timestamp', 'timestamps', 'time_stamp', 'date'];
+        const idSynonyms = ['id', 'machine_id'];
+
+        const validColumns = columns.filter(col => {
+            const colLower = col.toLowerCase();
+            return !timestampSynonyms.includes(colLower) && !idSynonyms.includes(colLower) && fileColumns.includes(col);
+        });
+        
+        if (validColumns.length === 0) {
+            throw new Error('No valid sensor columns found in the CSV file after filtering.');
+        }
+        
+        const pythonPath = process.env.PYTHON_PATH || 'python3';
+        const pythonScript = path.join(__dirname, '../models/anomaly.py');
+        
+        const pythonProcess = spawn(pythonPath, [
+            pythonScript, 'train', userId, machineId, filePath,
+            validColumns.join(','), TRAINING_ROW_LIMIT.toString()
+        ]);
+
+        let lastJsonOutput = '';
+        let errorOutput = '';
+        
+        pythonProcess.stdout.on('data', async (data) => {
+            const output = data.toString();
+            console.log(`[TRAIN-STDOUT ${machineId}]: ${output}`);
+            const jsonStrings = output.trim().split('\\n');
+            
+            for (const jsonString of jsonStrings) {
+                try {
+                    const result = JSON.parse(jsonString);
+                    lastJsonOutput = jsonString;
+
+                    if (result.type === 'progress') {
+                        await Machine.findByIdAndUpdate(machineId, {
+                            training_progress: result.progress,
+                            training_message: result.message
+                        });
+                    } else if (result.error) {
+                        errorOutput += result.error + '\\n';
+                    }
+                } catch (e) { /* ignore non-json output */ }
+            }
+        });
+
+        pythonProcess.stderr.on('data', (data) => {
+            errorOutput += data.toString();
+            console.error(`[TRAIN-ERR ${machineId}]: ${data.toString()}`);
+        });
+
+        pythonProcess.on('close', async (code) => {
+            try {
+                const paths = getModelPaths(userId, machineId);
+                const modelFilesExist = fs.existsSync(paths.model_file) && fs.existsSync(paths.threshold_file);
+                const result = lastJsonOutput ? JSON.parse(lastJsonOutput) : null;
+                
+                if (code === 0 && result && result.success && modelFilesExist) {
+                    const thresholdData = JSON.parse(fs.readFileSync(paths.threshold_file, 'utf8'));
+                    await Machine.findByIdAndUpdate(machineId, {
+                        training_status: 'completed',
+                        model_params: thresholdData,
+                        training_message: 'Training completed successfully.'
+                    });
+                } else {
+                    let errorMsg = `Training failed with exit code ${code}.`;
+                    if (result && result.error) {
+                        errorMsg = result.error;
+                    } else if (errorOutput) {
+                        errorMsg = errorOutput.substring(0, 500);
+                    }
+                    throw new Error(errorMsg);
+                }
+            } catch (e) {
+                await Machine.findByIdAndUpdate(machineId, { 
+                    training_status: 'failed',
+                    training_message: `Training failed: ${e.message.substring(0, 255)}`
+                });
+            }
+        });
+
+    } catch (error) {
+        await Machine.findByIdAndUpdate(machineId, { 
+            training_status: 'failed',
+            training_message: `Training failed: ${error.message.substring(0, 255)}`
+        });
+    }
+}
+
 module.exports = router; 
