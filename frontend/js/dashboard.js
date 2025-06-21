@@ -3,6 +3,12 @@
 let allMachines = [];
 let currentPredictionMachineId = null;
 
+let machineConfig = {
+    file: null,
+    headers: [],
+    selectedSensors: []
+};
+
 document.addEventListener('DOMContentLoaded', function() {
     // Check authentication before loading dashboard
     checkDashboardAuth();
@@ -219,70 +225,146 @@ function initMachineManagement() {
 
 function initAddMachineModal() {
     const modal = document.getElementById('addMachineModal');
-    const addMachineBtn = document.getElementById('addMachineBtn');
-    const addFirstMachineBtn = document.getElementById('addFirstMachineBtn');
-    const closeModalBtn = document.getElementById('closeModal');
-    const cancelBtn = document.getElementById('cancelAddMachine');
+    if (!modal) return;
+
     const form = document.getElementById('addMachineForm');
-
-    const openModal = () => {
-        if (modal) modal.classList.add('show');
+    const cancelBtn = document.getElementById('cancelAddMachine');
+    const closeModalBtn = document.getElementById('closeModal');
+    
+    const goToStep2Btn = document.getElementById('goToStep2');
+    const backToStep1Btn = document.getElementById('backToStep1');
+    const goToStep3Btn = document.getElementById('goToStep3');
+    const backToStep2Btn = document.getElementById('backToStep2');
+    
+    const openModal = () => modal.classList.add('show');
+    const closeModal = () => {
+        modal.classList.remove('show');
+        resetModal();
     };
 
-    const closeModalFunc = () => {
-        if (modal) modal.classList.remove('show');
-    };
+    document.getElementById('addMachineBtn').addEventListener('click', openModal);
+    document.getElementById('addFirstMachineBtn')?.addEventListener('click', openModal);
+    cancelBtn.addEventListener('click', closeModal);
+    closeModalBtn.addEventListener('click', closeModal);
 
-    if (addMachineBtn) addMachineBtn.addEventListener('click', openModal);
-    if (addFirstMachineBtn) addFirstMachineBtn.addEventListener('click', openModal);
-    if (closeModalBtn) closeModalBtn.addEventListener('click', closeModalFunc);
-    if (cancelBtn) cancelBtn.addEventListener('click', closeModalFunc);
+    // Step navigation
+    goToStep2Btn.addEventListener('click', handleGoToStep2);
+    backToStep1Btn.addEventListener('click', () => navigateSteps(1));
+    goToStep3Btn.addEventListener('click', handleGoToStep3);
+    backToStep2Btn.addEventListener('click', () => navigateSteps(2));
 
-    if (modal) {
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                closeModalFunc();
-            }
-        });
-    }
-
-    if (form) {
-        form.addEventListener('submit', handleAddMachine);
-    }
-
-    // Handle dynamic sensor inputs
-    const addSensorBtn = document.getElementById('addSensorBtn');
-    if (addSensorBtn) {
-        addSensorBtn.addEventListener('click', addSensorInput);
-    }
-
-    // Add one sensor input by default
-    addSensorInput();
+    form.addEventListener('submit', handleAddMachine);
 }
 
-let sensorCount = 0;
-function addSensorInput() {
-    sensorCount++;
+function navigateSteps(stepNumber) {
+    document.querySelectorAll('.form-step').forEach(step => {
+        step.style.display = 'none';
+    });
+    document.querySelector(`.form-step[data-step="${stepNumber}"]`).style.display = 'block';
+
+    document.querySelectorAll('.modal-stepper .step').forEach(step => {
+        step.classList.remove('active');
+    });
+    document.querySelector(`.modal-stepper .step[data-step="${stepNumber}"]`).classList.add('active');
+}
+
+async function handleGoToStep2() {
+    const fileInput = document.getElementById('trainingData');
+    machineConfig.file = fileInput.files[0];
+    
+    if (!document.getElementById('machineName').value || !document.getElementById('machineType').value) {
+        showMessage('Please fill out the machine name and type.', 'error');
+        return;
+    }
+
+    if (!machineConfig.file) {
+        showMessage('Please select a training data file.', 'error');
+        return;
+    }
+
+    navigateSteps(2);
+    const headersContainer = document.getElementById('csvHeadersContainer');
+    const spinner = headersContainer.querySelector('.spinner-container');
+    spinner.style.display = 'flex';
+
+    try {
+        const formData = new FormData();
+        formData.append('trainingData', machineConfig.file);
+
+        const response = await fetch('/api/dashboard/get-csv-headers', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+            body: formData
+        });
+
+        const result = await response.json();
+        spinner.style.display = 'none';
+
+        if (response.ok && result.success) {
+            machineConfig.headers = result.headers;
+            displayCsvHeaders(result.headers);
+        } else {
+            showMessage(result.message || 'Could not load CSV headers.', 'error');
+            navigateSteps(1); // Go back if error
+        }
+    } catch (error) {
+        spinner.style.display = 'none';
+        showMessage('An error occurred while reading the file.', 'error');
+        navigateSteps(1);
+    }
+}
+
+function displayCsvHeaders(headers) {
+    const container = document.getElementById('csvHeadersContainer');
+    container.innerHTML = headers.map(header => `
+        <div class="sensor-checkbox-item">
+            <input type="checkbox" id="sensor-header-${header}" name="selectedSensors" value="${header}">
+            <label for="sensor-header-${header}">${header}</label>
+        </div>
+    `).join('');
+}
+
+function handleGoToStep3() {
+    const selected = Array.from(document.querySelectorAll('#csvHeadersContainer input[type="checkbox"]:checked'))
+                          .map(cb => cb.value);
+
+    if (selected.length === 0) {
+        showMessage('Please select at least one sensor column.', 'error');
+        return;
+    }
+    
+    machineConfig.selectedSensors = selected;
+    displaySensorConfiguration(selected);
+    navigateSteps(3);
+}
+
+function displaySensorConfiguration(sensors) {
     const container = document.getElementById('sensorConfigContainer');
-    const newSensorRow = document.createElement('div');
-    newSensorRow.classList.add('sensor-row');
-    newSensorRow.setAttribute('data-id', sensorCount);
-
-    newSensorRow.innerHTML = `
-        <div class="form-group">
-            <label for="sensorName${sensorCount}">Sensor Name (e.g., Temperature, Pressure)</label>
-            <input type="text" id="sensorName${sensorCount}" name="sensorName" placeholder="Main Pump Temperature" required>
+    container.innerHTML = sensors.map((sensor, index) => `
+        <div class="sensor-row">
+            <div class="form-group">
+                <label>CSV Column</label>
+                <input type="text" value="${sensor}" disabled>
+                <input type="hidden" name="sensorName" value="${sensor}">
+            </div>
+            <div class="form-group">
+                <label for="sensorDisplayName${index}">Display Name</label>
+                <input type="text" id="sensorDisplayName${index}" name="sensorDisplayName" value="${sensor}" placeholder="e.g., Main Pump Temperature" required>
+            </div>
+            <div class="form-group">
+                <label for="sensorUnit${index}">Unit</label>
+                <input type="text" id="sensorUnit${index}" name="sensorUnit" placeholder="e.g., Celsius, PSI" required>
+            </div>
         </div>
-        <div class="form-group">
-            <label for="sensorUnit${sensorCount}">Sensor Units (e.g., C, PSI)</label>
-            <input type="text" id="sensorUnit${sensorCount}" name="sensorUnit" placeholder="Celsius" required>
-        </div>
-        <button type="button" class="remove-sensor-btn" onclick="this.parentElement.remove()">
-            <i class="fas fa-trash-alt"></i>
-        </button>
-    `;
+    `).join('');
+}
 
-    container.appendChild(newSensorRow);
+function resetModal() {
+    document.getElementById('addMachineForm').reset();
+    machineConfig = { file: null, headers: [], selectedSensors: [] };
+    document.getElementById('csvHeadersContainer').innerHTML = '<div class="spinner-container" style="display: none;"><div class="spinner"></div><p>Loading CSV columns...</p></div>';
+    document.getElementById('sensorConfigContainer').innerHTML = '';
+    navigateSteps(1);
 }
 
 function showFormError(fieldId, message) {
@@ -311,32 +393,13 @@ function clearFormErrors() {
 }
 
 function validateForm() {
-    clearFormErrors();
-    let isValid = true;
-    const requiredFields = ['machineName', 'machineType', 'model', 'serialNumber', 'scadaSystem', 'trainingData'];
-
-    requiredFields.forEach(fieldId => {
-        const field = document.getElementById(fieldId);
-        if (!field) return;
-        
-        const isFile = field.type === 'file';
-        const isEmpty = isFile ? field.files.length === 0 : field.value.trim() === '';
-
-        if (isEmpty) {
-            showFormError(fieldId, 'This field is required.');
-            isValid = false;
-        }
-    });
-    return isValid;
+    // Basic validation is now handled per step.
+    return true;
 }
 
 async function handleAddMachine(e) {
     e.preventDefault();
-    if (!validateForm()) {
-        showMessage('Please fill out all required fields.', 'error');
-        return;
-    }
-
+    
     const form = document.getElementById('addMachineForm');
     const submitBtn = form.querySelector('button[type="submit"]');
     const progressContainer = document.getElementById('uploadProgressContainer');
@@ -346,30 +409,27 @@ async function handleAddMachine(e) {
     submitBtn.classList.add('loading');
     submitBtn.disabled = true;
     progressContainer.style.display = 'block';
-    progressBar.style.width = '0%';
-    progressText.textContent = '0%';
 
     try {
-        // Use the raw form data directly
-        const payload = new FormData(form);
+        const formData = new FormData(form);
+        // We need to re-append the file as it's not part of the form state anymore
+        formData.append('trainingData', machineConfig.file, machineConfig.file.name);
+        
+        // Remove display names as they are not part of the Machine model
+        formData.delete('sensorDisplayName');
 
         const response = await fetchWithProgress('/api/dashboard/add-machine', {
             method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-            },
-            body: payload
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+            body: formData
         }, progressBar, progressText);
-        
+
         const result = await response.json();
 
         if (response.ok && result.success) {
             showMessage('Machine added successfully! Model training has started.', 'success');
             document.getElementById('addMachineModal').classList.remove('show');
-            form.reset();
-            // Clear dynamic sensor fields
-            document.getElementById('sensorConfigContainer').innerHTML = '';
-            addSensorInput(); // Add one back for the next time
+            resetModal();
             setTimeout(loadDashboardData, 1000);
         } else {
             showMessage(result.message || 'Failed to add machine.', 'error');

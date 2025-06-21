@@ -55,17 +55,22 @@ def build_lstm_autoencoder(timesteps, n_features):
     return model
 
 # --- Training ---
-def train_model_for_machine(user_id: str, machine_id: str, data_path: str) -> Dict[str, Any]:
+def train_model_for_machine(user_id: str, machine_id: str, data_path: str, sensor_columns: List[str]) -> Dict[str, Any]:
     """Main function to orchestrate the training process for a specific machine."""
     paths = get_machine_model_paths(user_id, machine_id)
     
     try:
         print(f"Loading data from {data_path} for machine {machine_id} of user {user_id}...")
-        # Read only the first 150,000 rows to approximate the first 5MB and ensure speed
         df = pd.read_csv(data_path, sep=';', index_col='time_stamp', parse_dates=True, nrows=150000)
         df.dropna(axis=1, how='all', inplace=True)
+
+        # Validate that the user-provided sensor columns exist in the CSV file.
+        missing_cols = [col for col in sensor_columns if col not in df.columns]
+        if missing_cols:
+            return {"success": False, "error": f"The following sensor columns were not found in the uploaded file: {', '.join(missing_cols)}"}
         
-        sensor_cols = sorted([col for col in df.columns if 'sensor' in col or 'power' in col or 'wind_speed' in col])
+        # Use the exact, sorted list of user-provided columns. Sorting is crucial for consistency.
+        sensor_cols = sorted(sensor_columns)
         
         with open(paths['columns_file'], 'w') as f:
             json.dump(sensor_cols, f)
@@ -215,12 +220,13 @@ if __name__ == "__main__":
     mode = sys.argv[1]
 
     if mode == 'train':
-        if len(sys.argv) != 5:
-            result = {"success": False, "error": "Incorrect number of arguments for training mode."}
+        if len(sys.argv) != 6:
+            result = {"success": False, "error": "Incorrect number of arguments for training mode. Expected: user_id, machine_id, data_path, sensor_columns"}
             print(json.dumps(result))
             sys.exit(1)
-        user_id_arg, machine_id_arg, data_path_arg = sys.argv[2], sys.argv[3], sys.argv[4]
-        result = train_model_for_machine(user_id_arg, machine_id_arg, data_path_arg)
+        user_id_arg, machine_id_arg, data_path_arg, sensors_arg = sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]
+        sensor_list = [s.strip() for s in sensors_arg.split(',')]
+        result = train_model_for_machine(user_id_arg, machine_id_arg, data_path_arg, sensor_list)
         print(json.dumps(result))
     
     elif mode == 'predict':

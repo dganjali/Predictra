@@ -299,7 +299,8 @@ router.post('/add-machine', auth, upload.single('trainingData'), async (req, res
         await newMachine.save();
         
         // Asynchronously start the model training process
-        trainAnomalyDetectionModel(newMachine._id, req.user._id, req.file.path);
+        const sensorNamesList = sensors.map(s => s.name);
+        trainAnomalyDetectionModel(newMachine._id, req.user._id, req.file.path, sensorNamesList);
 
         res.status(201).json({ 
             success: true, 
@@ -325,9 +326,10 @@ router.post('/add-machine', auth, upload.single('trainingData'), async (req, res
 });
 
 // Function to call the Python training script
-function trainAnomalyDetectionModel(machineId, userId, dataPath) {
+function trainAnomalyDetectionModel(machineId, userId, dataPath, sensorNames) {
     const pythonScriptPath = path.join(__dirname, '..', 'models', 'anomaly.py');
-    const pythonProcess = spawn('python3', [pythonScriptPath, 'train', userId.toString(), machineId.toString(), dataPath]);
+    const sensorNamesArg = sensorNames.join(',');
+    const pythonProcess = spawn('python3', [pythonScriptPath, 'train', userId.toString(), machineId.toString(), dataPath, sensorNamesArg]);
 
     pythonProcess.stdout.on('data', async (data) => {
         const output = data.toString();
@@ -658,6 +660,39 @@ router.delete('/machine/:id', auth, async (req, res) => {
     } catch (error) {
         console.error('Remove machine error:', error);
         res.status(500).json({ success: false, message: 'Server error during machine removal' });
+    }
+});
+
+// @route   POST /api/dashboard/get-csv-headers
+// @desc    Upload a CSV and return its headers
+// @access  Private
+router.post('/get-csv-headers', auth, upload.single('trainingData'), async (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ success: false, message: 'No file uploaded.' });
+    }
+
+    const filePath = req.file.path;
+
+    try {
+        const fileContent = fs.readFileSync(filePath, 'utf8');
+        // Use a more robust method to get the first line
+        const firstLine = fileContent.split(/\r?\n/)[0];
+        const headers = firstLine.split(';'); // Assuming semicolon delimited based on training script
+        
+        // Clean up the uploaded file immediately
+        fs.unlinkSync(filePath);
+
+        res.json({ success: true, headers: headers.filter(h => h) }); // Filter out empty headers
+
+    } catch (error) {
+        console.error('Error reading CSV headers:', error);
+        
+        // Ensure cleanup even on error
+        if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+        }
+        
+        res.status(500).json({ success: false, message: 'Failed to read file headers.' });
     }
 });
 
