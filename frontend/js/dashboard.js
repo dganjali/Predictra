@@ -334,7 +334,11 @@ function initTrainMachineModal() {
     };
 
     closeModalBtn.addEventListener('click', closeModal);
-    finishBtn.addEventListener('click', closeModal);
+    finishBtn.addEventListener('click', () => {
+        // Trigger form submission instead of just closing
+        const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
+        form.dispatchEvent(submitEvent);
+    });
     
     nextBtn.addEventListener('click', () => {
         if (validateStep(currentStep)) {

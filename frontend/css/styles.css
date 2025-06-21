@@ -272,8 +272,23 @@ a:hover {
 
 /* Hero Section */
 .hero {
+    background: linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)), url('../images/factory photo.png');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    color: white;
+    padding: 6rem 0;
+    position: relative;
+}
+
+.about-hero {
+    background: linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)), url('../images/factory photo.png');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    color: white;
     padding: 4rem 0;
-    background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+    position: relative;
 }
 
 .hero-container {
@@ -289,16 +304,16 @@ a:hover {
 .hero-title {
     font-size: 3rem;
     font-weight: 700;
-    color: var(--text-primary);
     margin-bottom: 1.5rem;
-    line-height: 1.1;
+    color: white;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
 }
 
 .hero-subtitle {
     font-size: 1.25rem;
-    color: var(--text-secondary);
     margin-bottom: 2rem;
-    line-height: 1.6;
+    color: rgba(255, 255, 255, 0.9);
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .hero-buttons {
@@ -2843,5 +2858,52 @@ select.form-control {
         border-bottom: 1px solid #dee2e6;
         padding-bottom: 0.5rem;
         padding-right: 0;
+    }
+}
+
+/* Responsive adjustments for factory background */
+@media (max-width: 768px) {
+    .hero {
+        background-attachment: scroll; /* Better performance on mobile */
+        padding: 4rem 0;
+    }
+    
+    .about-hero {
+        background-attachment: scroll;
+        padding: 3rem 0;
+    }
+    
+    .hero-title {
+        font-size: 2rem;
+        text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.7);
+    }
+    
+    .hero-subtitle {
+        font-size: 1rem;
+        text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.7);
+    }
+    
+    .hero-container {
+        grid-template-columns: 1fr;
+        gap: 2rem;
+        text-align: center;
+    }
+}
+
+@media (max-width: 480px) {
+    .hero {
+        padding: 3rem 0;
+    }
+    
+    .about-hero {
+        padding: 2rem 0;
+    }
+    
+    .hero-title {
+        font-size: 1.75rem;
+    }
+    
+    .hero-subtitle {
+        font-size: 0.9rem;
     }
 }
