@@ -1045,6 +1045,13 @@ async function handlePrediction(e) {
                 }
             }
             
+            if (result.data.rulEstimate !== undefined) {
+                const rulEstimateElement = document.getElementById('rulEstimate');
+                if (rulEstimateElement) {
+                    rulEstimateElement.textContent = `${result.data.rulEstimate} days`;
+                }
+            }
+            
             if (result.data.status !== undefined) {
                 const statusElement = document.getElementById('riskStatus');
                 if (statusElement) {
@@ -1059,6 +1066,7 @@ async function handlePrediction(e) {
             const machineIndex = allMachines.findIndex(m => m._id === currentPredictionMachineId);
             if (machineIndex !== -1) {
                 allMachines[machineIndex].healthScore = result.data.healthScore || allMachines[machineIndex].healthScore;
+                allMachines[machineIndex].rulEstimate = result.data.rulEstimate || allMachines[machineIndex].rulEstimate;
                 allMachines[machineIndex].status = result.data.status || allMachines[machineIndex].status;
                 allMachines[machineIndex].lastUpdated = new Date().toISOString();
                 

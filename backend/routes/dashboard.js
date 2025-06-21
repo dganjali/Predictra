@@ -518,6 +518,30 @@ router.post('/machine/:id/predict', auth, async (req, res) => {
                         healthScore = Math.min(100, 100 - (riskScore * 50));
                     }
                     
+                    // Calculate RUL based on the provided parameters
+                    const RUL_THRESHOLD = 90;
+                    const CLASSIFIER_THRESHOLD = 90;
+                    const WINDOW_SIZE = 100;
+                    
+                    // Convert risk score to a percentage (0-100)
+                    const riskPercentage = Math.min(100, Math.max(0, riskScore * 100));
+                    
+                    // Calculate RUL based on risk percentage and thresholds
+                    let rulEstimate;
+                    if (riskPercentage >= RUL_THRESHOLD) {
+                        // High risk - low RUL (0-30 days)
+                        rulEstimate = Math.max(0, 30 - (riskPercentage - RUL_THRESHOLD) * 0.5);
+                    } else if (riskPercentage >= CLASSIFIER_THRESHOLD) {
+                        // Medium risk - moderate RUL (30-90 days)
+                        rulEstimate = 30 + (RUL_THRESHOLD - riskPercentage) * 2;
+                    } else {
+                        // Low risk - high RUL (90-365 days)
+                        rulEstimate = 90 + (CLASSIFIER_THRESHOLD - riskPercentage) * 3;
+                    }
+                    
+                    // Ensure RUL is within reasonable bounds (0-365 days)
+                    rulEstimate = Math.max(0, Math.min(365, rulEstimate));
+                    
                     // Update machine status based on health score
                     let status = 'healthy';
                     if (healthScore < 30) {
@@ -529,18 +553,21 @@ router.post('/machine/:id/predict', auth, async (req, res) => {
                     // Update the machine in database
                     await Machine.findByIdAndUpdate(machine._id, {
                         healthScore: Math.round(healthScore),
+                        rulEstimate: Math.round(rulEstimate),
                         status: status,
                         lastUpdated: new Date()
                     });
                     
-                    console.log(`Updated machine ${machine._id}: healthScore=${Math.round(healthScore)}, status=${status}`);
+                    console.log(`Updated machine ${machine._id}: healthScore=${Math.round(healthScore)}, rulEstimate=${Math.round(rulEstimate)}, status=${status}`);
                     
                     res.json({ 
                         success: true, 
                         data: {
                             ...result.data,
                             healthScore: Math.round(healthScore),
-                            status: status
+                            rulEstimate: Math.round(rulEstimate),
+                            status: status,
+                            riskPercentage: Math.round(riskPercentage)
                         }
                     });
                 } else {

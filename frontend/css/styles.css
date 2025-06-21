@@ -2907,3 +2907,20 @@ select.form-control {
         font-size: 0.9rem;
     }
 }
+
+.rul-estimate {
+    font-weight: bold;
+    color: #3b82f6;
+}
+
+.rul-estimate.critical {
+    color: #ef4444;
+}
+
+.rul-estimate.warning {
+    color: #f59e0b;
+}
+
+.rul-estimate.healthy {
+    color: #10b981;
+}
