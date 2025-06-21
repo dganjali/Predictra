@@ -287,6 +287,13 @@
                     <button type="button" class="btn btn-secondary" id="cancelAddMachine">Cancel</button>
                     <button type="submit" class="btn btn-primary">Add Machine & Begin Training</button>
                 </div>
+                <div class="form-progress" id="uploadProgressContainer" style="display: none;">
+                    <p>Uploading training data, please wait...</p>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="uploadProgressBar" style="width: 0%;"></div>
+                    </div>
+                    <span id="uploadProgressText">0%</span>
+                </div>
             </form>
         </div>
     </div>

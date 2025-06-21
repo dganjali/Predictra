@@ -1732,4 +1732,35 @@ a:hover {
     .machine-actions .btn {
         width: 100%;
     }
+}
+
+.form-progress {
+    margin-top: 1rem;
+    text-align: center;
+}
+
+.progress-bar-container {
+    background-color: var(--bg-tertiary);
+    border-radius: var(--radius-md);
+    height: 20px;
+    margin-top: 0.5rem;
+    overflow: hidden;
+    width: 100%;
+}
+
+.progress-bar {
+    background-color: var(--primary-color);
+    height: 100%;
+    text-align: center;
+    color: white;
+    line-height: 20px;
+    transition: width 0.3s ease-in-out;
+    border-radius: var(--radius-md);
+}
+
+#uploadProgressText {
+    display: block;
+    margin-top: 0.5rem;
+    font-weight: 500;
+    color: var(--text-secondary);
 } 

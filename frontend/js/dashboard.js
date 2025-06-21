@@ -239,8 +239,13 @@ async function handleAddMachine(e) {
 
     const form = document.getElementById('addMachineForm');
     const submitBtn = form.querySelector('button[type="submit"]');
+    const progressContainer = document.getElementById('uploadProgressContainer');
+    const progressBar = document.getElementById('uploadProgressBar');
+    const progressText = document.getElementById('uploadProgressText');
+    
     submitBtn.classList.add('loading');
     submitBtn.disabled = true;
+    progressContainer.style.display = 'block';
 
     try {
         const formData = new FormData(form);
@@ -251,41 +256,78 @@ async function handleAddMachine(e) {
             }
         }
         
-        const response = await fetch('/api/dashboard/add-machine', {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-            body: createFormDataWithFile(machineData, formData.get('trainingData'))
-        });
-        
-        const result = await response.json();
-        if (result.success) {
-            showMessage('Machine added successfully! Model training has started.', 'success');
-            document.getElementById('addMachineModal').classList.remove('show');
-            setTimeout(loadDashboardData, 1000);
-        } else {
-            showMessage(result.message || 'Failed to add machine.', 'error');
+        const originalFile = formData.get('trainingData');
+        let trainingFile = originalFile;
+        if (originalFile && originalFile.size > 5 * 1024 * 1024) {
+            trainingFile = originalFile.slice(0, 5 * 1024 * 1024);
+            showMessage('File is larger than 5MB. Uploading only the first 5MB.', 'info');
         }
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/dashboard/add-machine', true);
+        xhr.setRequestHeader('Authorization', `Bearer ${localStorage.getItem('token')}`);
+
+        xhr.upload.onprogress = function(event) {
+            if (event.lengthComputable) {
+                const percentComplete = Math.round((event.loaded / event.total) * 100);
+                progressBar.style.width = percentComplete + '%';
+                progressText.textContent = percentComplete + '%';
+            }
+        };
+
+        xhr.onload = function() {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                const result = JSON.parse(xhr.responseText);
+                if (result.success) {
+                    showMessage('Machine added successfully! Model training has started.', 'success');
+                    document.getElementById('addMachineModal').classList.remove('show');
+                    form.reset();
+                    setTimeout(loadDashboardData, 1000);
+                } else {
+                    showMessage(result.message || 'Failed to add machine.', 'error');
+                }
+            } else {
+                 try {
+                    const result = JSON.parse(xhr.responseText);
+                    showMessage(result.message || `An error occurred: ${xhr.statusText}`, 'error');
+                } catch (e) {
+                    showMessage(`An error occurred: ${xhr.statusText}`, 'error');
+                }
+            }
+            
+            // Reset and hide progress bar
+            progressContainer.style.display = 'none';
+            progressBar.style.width = '0%';
+            progressText.textContent = '0%';
+
+            // Re-enable button
+            submitBtn.classList.remove('loading');
+            submitBtn.disabled = false;
+        };
+
+        xhr.onerror = function() {
+            showMessage('A network error occurred. Please try again.', 'error');
+            progressContainer.style.display = 'none';
+            progressBar.style.width = '0%';
+            progressText.textContent = '0%';
+            submitBtn.classList.remove('loading');
+            submitBtn.disabled = false;
+        };
+        
+        const payload = new FormData();
+        payload.append('machineData', JSON.stringify(machineData));
+        if (trainingFile) {
+            payload.append('trainingData', trainingFile, originalFile.name);
+        }
+        xhr.send(payload);
+
     } catch (error) {
         console.error('Error adding machine:', error);
-        showMessage('A network error occurred. Please try again.', 'error');
-    } finally {
+        showMessage('An error occurred. Please try again.', 'error');
+        progressContainer.style.display = 'none';
         submitBtn.classList.remove('loading');
         submitBtn.disabled = false;
     }
-}
-
-function createFormDataWithFile(machineData, file) {
-    const formData = new FormData();
-    
-    // Add all machine data as JSON string
-    formData.append('machineData', JSON.stringify(machineData));
-    
-    // Add file separately
-    if (file) {
-        formData.append('trainingData', file);
-    }
-    
-    return formData;
 }
 
 function showMessage(message, type = 'info') {
