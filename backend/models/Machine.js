@@ -31,13 +31,13 @@ const machineSchema = new mongoose.Schema({
   },
   model: {
     type: String,
-    required: [true, 'Model number is required'],
+    // required: [true, 'Model number is required'],
     trim: true,
     maxlength: [100, 'Model number cannot exceed 100 characters']
   },
   serialNumber: {
     type: String,
-    required: [true, 'Serial number is required'],
+    // required: [true, 'Serial number is required'],
     trim: true,
     maxlength: [100, 'Serial number cannot exceed 100 characters']
   },
@@ -50,7 +50,7 @@ const machineSchema = new mongoose.Schema({
   // SCADA Configuration
   scadaSystem: {
     type: String,
-    required: [true, 'SCADA system is required'],
+    // required: [true, 'SCADA system is required'],
     enum: [
       'wonderware', 'siemens', 'rockwell', 'ge', 'honeywell', 
       'abb', 'schneider', 'custom', 'other'
