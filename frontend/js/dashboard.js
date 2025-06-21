@@ -283,9 +283,13 @@ async function handleGoToStep2() {
     }
 
     navigateSteps(2);
+    const headersContainer = document.getElementById('csvHeadersContainer');
+    const spinner = headersContainer.querySelector('.spinner-container');
     const progressContainer = document.getElementById('csvLoadProgressContainer');
     const progressBar = document.getElementById('csvLoadProgressBar');
     const progressText = document.getElementById('csvLoadProgressText');
+    
+    if(spinner) spinner.style.display = 'none'; // Hide spinner if it exists
     progressContainer.style.display = 'block';
 
     try {
@@ -317,6 +321,7 @@ async function handleGoToStep2() {
 
 function displayCsvHeaders(headers) {
     const container = document.getElementById('csvHeadersContainer');
+    // Clear everything, including a potential spinner
     container.innerHTML = headers.map(header => `
         <div class="sensor-checkbox-item">
             <input type="checkbox" id="sensor-header-${header}" name="selectedSensors" value="${header}">
