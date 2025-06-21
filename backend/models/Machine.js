@@ -143,6 +143,14 @@ const machineSchema = new mongoose.Schema({
     enum: ['none', 'pending', 'in_progress', 'completed', 'failed'],
     default: 'none'
   },
+  training_progress: {
+    type: Number,
+    default: 0
+  },
+  training_message: {
+    type: String,
+    default: ''
+  },
   training_columns: {
     type: [String]
   },

@@ -1972,8 +1972,11 @@ a:hover {
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     gap: 1rem;
     margin-top: 1rem;
-    border: none;
-    padding: 0;
+    border: 1px solid #ddd;
+    padding: 1rem;
+    border-radius: 8px;
+    max-height: 250px;
+    overflow-y: auto;
 }
 
 .checkbox-item {
@@ -1986,6 +1989,7 @@ a:hover {
     cursor: pointer;
     transition: all 0.2s ease-in-out;
     background-color: #fff;
+    overflow: hidden;
 }
 
 .checkbox-item:hover {
@@ -2005,6 +2009,13 @@ a:hover {
     width: 1.2em;
     height: 1.2em;
     accent-color: var(--primary-color);
+}
+
+.checkbox-item label {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
 }
 
 .progress-container {

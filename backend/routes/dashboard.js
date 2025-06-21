@@ -284,11 +284,26 @@ async function trainModel(machine, user) {
         ]);
 
         let lastJsonOutput = '';
-        pythonProcess.stdout.on('data', (data) => {
+        pythonProcess.stdout.on('data', async (data) => {
             const output = data.toString();
-            console.log(`[TRAIN-LOG ${machineId}]: ${output}`);
+            // The script may output multiple JSONs in one chunk, separated by newlines
             const jsonStrings = output.trim().split('\n');
-            lastJsonOutput = jsonStrings[jsonStrings.length - 1];
+            
+            for (const jsonString of jsonStrings) {
+                try {
+                    const result = JSON.parse(jsonString);
+                    lastJsonOutput = jsonString; // Store the last valid JSON
+
+                    if (result.type === 'progress') {
+                        await Machine.findByIdAndUpdate(machineId, {
+                            training_progress: result.progress,
+                            training_message: result.message
+                        });
+                    }
+                } catch (e) {
+                    console.log(`[TRAIN-LOG ${machineId}]: (non-JSON) ${jsonString}`);
+                }
+            }
         });
 
         pythonProcess.stderr.on('data', (data) => {
@@ -348,7 +363,9 @@ router.get('/machine/:machineId/status', auth, async (req, res) => {
         res.json({
             success: true,
             status: machine.training_status,
-            modelStatus: machine.modelStatus
+            modelStatus: machine.modelStatus,
+            progress: machine.training_progress,
+            message: machine.training_message
         });
 
     } catch (error) {

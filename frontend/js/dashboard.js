@@ -348,8 +348,7 @@ function initAddMachineModal() {
                     checkbox.id = `col-${header}`;
                     checkbox.name = 'columns';
                     checkbox.value = header;
-                    checkbox.checked = true; // Select all feature columns by default
-                    checkboxDiv.classList.add('selected');
+                    checkbox.checked = false; // Unchecked by default
                     
                     checkbox.addEventListener('change', () => checkboxDiv.classList.toggle('selected', checkbox.checked));
                     
@@ -539,12 +538,18 @@ function displayMachines(machines) {
         
         let statusContent;
         if (training_status === 'in_progress' || training_status === 'pending') {
+             const progress = machine.training_progress || 0;
+             const message = machine.training_message || (training_status === 'pending' ? 'Pending in queue' : 'Initializing...');
              statusContent = `
                  <div class="status-training-container">
                      <div class="status-line">
                          <span class="status-badge status-training"><i class="fas fa-sync-alt fa-spin"></i> Training...</span>
+                         <span class="progress-percentage">${progress}%</span>
                      </div>
-                     <div class="status-details-text">${training_status === 'pending' ? 'Pending in queue' : 'Processing data...'}</div>
+                     <div class="progress-bar-container">
+                        <div class="progress-bar" style="width: ${progress}%;"></div>
+                     </div>
+                     <div class="status-details-text">${message}</div>
                  </div>
              `;
         } else if (training_status === 'failed') {
@@ -668,39 +673,47 @@ function startTrainingStatusPolling(machineId) {
 }
 
 async function pollMachineStatus(machineId) {
+    if (!activePollers[machineId]) {
+        return; 
+    }
+
     try {
-        const response = await fetch(`/api/dashboard/machine/${machineId}/training-status`, {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        const token = localStorage.getItem('token');
+        const response = await fetch(`/api/dashboard/machine/${machineId}/status`, {
+            headers: { 'Authorization': `Bearer ${token}` }
         });
+        const data = await response.json();
 
-        if (!response.ok) {
-            console.error(`Failed to get status for machine ${machineId}. Stopping poller.`);
-            clearInterval(activePollers[machineId]);
-            delete activePollers[machineId];
-            return;
-        }
+        if (data.success) {
+            const machineCard = document.getElementById(`machine-${machineId}`);
+            if (machineCard) {
+                // Update progress bar and message
+                const progressBar = machineCard.querySelector('.progress-bar');
+                const progressPercentage = machineCard.querySelector('.progress-percentage');
+                const statusDetails = machineCard.querySelector('.status-details-text');
 
-        const result = await response.json();
-        if (result.success) {
-            const machine = result.data;
-            const card = document.getElementById(`machine-${machineId}`);
-
-            if (machine.modelStatus === 'training') {
-                // Update progress bar and text
-                card.querySelector('.progress-bar').style.width = `${machine.trainingProgress}%`;
-                card.querySelector('.progress-percentage').textContent = `${machine.trainingProgress}%`;
-                card.querySelector('.status-details-text').textContent = machine.statusDetails;
-            } else {
-                // Training finished or failed, stop polling and refresh the entire dashboard
-                console.log(`Training finished for machine ${machineId}. Status: ${machine.modelStatus}. Stopping poller.`);
-                clearInterval(activePollers[machineId]);
-                delete activePollers[machineId];
-                loadDashboardData(); // Refresh to get the final card state
+                if (progressBar) progressBar.style.width = `${data.progress || 0}%`;
+                if (progressPercentage) progressPercentage.textContent = `${data.progress || 0}%`;
+                if (statusDetails) statusDetails.textContent = data.message || 'Processing...';
             }
+
+            // If training is complete or failed, stop polling
+            if (data.status === 'completed' || data.status === 'failed') {
+                console.log(`Stopping polling for machine ${machineId}, status: ${data.status}`);
+                clearInterval(activePollers[machineId].intervalId);
+                delete activePollers[machineId];
+                // Refresh the entire card to show final state
+                loadDashboardData();
+            }
+        } else {
+            // Stop polling on error
+            console.error(`Error fetching status for machine ${machineId}:`, data.message);
+            clearInterval(activePollers[machineId].intervalId);
+            delete activePollers[machineId];
         }
     } catch (error) {
-        console.error(`Error polling for machine ${machineId}:`, error);
-        clearInterval(activePollers[machineId]);
+        console.error(`Network error while polling for machine ${machineId}:`, error);
+        clearInterval(activePollers[machineId].intervalId);
         delete activePollers[machineId];
     }
 }
