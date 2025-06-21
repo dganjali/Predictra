@@ -241,231 +241,56 @@ router.post('/machines', auth, upload.single('csvFile'), async (req, res) => {
     }
 });
 
-async function trainModel(machine, user) {
-    const machineId = machine._id.toString();
-    const userId = user._id.toString();
-    const filePath = machine.training_data_path;
-    let columns = machine.training_columns;
-    const TRAINING_ROW_LIMIT = 20000;
-
-    try {
-        await Machine.findByIdAndUpdate(machineId, { 
-            training_status: 'in_progress',
-            training_message: 'Preparing data for training...' 
-        });
-        
-        // Make sure the file exists
-        if (!fs.existsSync(filePath)) {
-            throw new Error(`Training file not found at path: ${filePath}`);
-        }
-        
-        // Create the directories for model storage
-        const modelsDir = path.join(__dirname, '../models/user_models');
-        const userDir = path.join(modelsDir, `user_${userId}`);
-        const machineDir = path.join(userDir, `machine_${machineId}`);
-        
-        fs.mkdirSync(modelsDir, { recursive: true });
-        fs.mkdirSync(userDir, { recursive: true });
-        fs.mkdirSync(machineDir, { recursive: true });
-        
-        console.log(`Created directories for model storage: ${machineDir}`);
-        
-        // Read the file to determine format
-        const data = fs.readFileSync(filePath, 'utf8');
-        const lines = data.split(/\r?\n/);
-        if (lines.length < 2) {
-            throw new Error('CSV file has insufficient data (less than 2 lines)');
-        }
-        
-        const header = lines[0];
-        const delimiter = header.includes(';') ? ';' : ',';
-        const fileColumns = header.split(delimiter).map(c => c.trim());
-        
-        console.log(`CSV header columns: ${fileColumns.join(', ')}`);
-        
-        // Find timestamp column
-        const timestampSynonyms = ['timestamp', 'timestamps', 'time_stamp', 'date'];
-        let timestampColumn = '';
-        
-        for (const col of fileColumns) {
-            if (timestampSynonyms.includes(col.toLowerCase())) {
-                timestampColumn = col;
-                break;
-            }
-        }
-        
-        if (timestampColumn && timestampColumn !== 'time_stamp') {
-            lines[0] = header.replace(timestampColumn, 'time_stamp');
-            const updatedData = lines.join('\n');
-            fs.writeFileSync(filePath, updatedData);
-            console.log(`Renamed timestamp column ${timestampColumn} to time_stamp`);
-        } else if (!timestampColumn) {
-            throw new Error('No timestamp column found in the CSV file. Please use one of: ' + timestampSynonyms.join(', '));
-        }
-
-        // Filter out ID and timestamp columns for model training
-        const idSynonyms = ['id', 'machine_id'];
-        const validColumns = columns.filter(col => {
-            const colLower = col.toLowerCase();
-            const isTimestamp = timestampSynonyms.includes(colLower);
-            const isId = idSynonyms.includes(colLower);
-            const exists = fileColumns.includes(col);
-            
-            if (!exists) {
-                console.log(`Warning: Selected column "${col}" not found in CSV file`);
-            }
-            
-            return !isTimestamp && !isId && exists;
-        });
-        
-        if (validColumns.length === 0) {
-            throw new Error('No valid sensor columns found in the CSV file after filtering');
-        }
-        
-        console.log(`Using columns for training: ${validColumns.join(', ')}`);
-        
-        // Start the Python training process
-        const pythonPath = process.env.PYTHON_PATH || 'python3';
-        const pythonScript = path.join(__dirname, '../models/anomaly.py');
-        
-        const pythonProcess = spawn(pythonPath, [
-            pythonScript,
-            'train',
-            userId,
-            machineId,
-            filePath,
-            validColumns.join(','),
-            TRAINING_ROW_LIMIT.toString()
-        ]);
-
-        let lastJsonOutput = '';
-        let errorOutput = '';
-        
-        pythonProcess.stdout.on('data', async (data) => {
-            const output = data.toString();
-            console.log(`[TRAIN-STDOUT ${machineId}]: ${output}`);
-            
-            // The script may output multiple JSONs in one chunk, separated by newlines
-            const jsonStrings = output.trim().split('\n');
-            
-            for (const jsonString of jsonStrings) {
-                try {
-                    const result = JSON.parse(jsonString);
-                    lastJsonOutput = jsonString; // Store the last valid JSON
-
-                    if (result.type === 'progress') {
-                        await Machine.findByIdAndUpdate(machineId, {
-                            training_progress: result.progress,
-                            training_message: result.message
-                        });
-                    } else if (result.error) {
-                        // Error from Python script
-                        errorOutput += result.error + '\n';
-                        console.error(`[TRAIN-ERROR ${machineId}]: ${result.error}`);
-                        await Machine.findByIdAndUpdate(machineId, {
-                            training_status: 'failed',
-                            training_message: `Failed: ${result.error}`
-                        });
-                    }
-                } catch (e) {
-                    console.log(`[TRAIN-LOG ${machineId}]: (non-JSON) ${jsonString}`);
-                }
-            }
-        });
-
-        pythonProcess.stderr.on('data', (data) => {
-            const stderr = data.toString();
-            errorOutput += stderr;
-            console.error(`[TRAIN-ERR ${machineId}]: ${stderr}`);
-        });
-
-        pythonProcess.on('close', async (code) => {
-            console.log(`[TRAIN-CLOSE ${machineId}]: child process exited with code ${code}`);
-            try {
-                // Check if the model files were created
-                const paths = getModelPaths(userId, machineId);
-                const modelFilesExist = fs.existsSync(paths.model_file) && fs.existsSync(paths.threshold_file);
-                
-                if (code === 0 && lastJsonOutput) {
-                    try {
-                        const result = JSON.parse(lastJsonOutput);
-                        if (result.success) {
-                            if (modelFilesExist) {
-                                const thresholdData = fs.readFileSync(paths.threshold_file, 'utf8');
-                                await Machine.findByIdAndUpdate(machineId, {
-                                    training_status: 'completed',
-                                    model_params: JSON.parse(thresholdData),
-                                    modelStatus: 'trained',
-                                    training_message: 'Training completed successfully.'
-                                });
-                                console.log(`Training completed successfully for machine ${machineId}`);
-                            } else {
-                                throw new Error('Model training completed but model files were not created.');
-                            }
-                        } else {
-                            throw new Error(result.error || 'Training completed with errors');
-                        }
-                    } catch (parseError) {
-                        throw new Error(`Error parsing Python output: ${parseError.message}`);
-                    }
-                } else {
-                    // Process exited with non-zero code or no valid JSON output
-                    let errorMsg = `Training failed with exit code ${code}.`;
-                    if (errorOutput) {
-                        errorMsg += ` Error: ${errorOutput.substring(0, 500)}`; // Trim if too long
-                    }
-                    throw new Error(errorMsg);
-                }
-            } catch (e) {
-                const errorMessage = e.message || 'Unknown training error';
-                console.error(`Training failed for machine ${machineId}: ${errorMessage}`);
-                await Machine.findByIdAndUpdate(machineId, { 
-                    training_status: 'failed',
-                    training_message: `Training failed: ${errorMessage.substring(0, 255)}`
-                });
-            }
-        });
-
-    } catch (error) {
-        console.error(`Error during training setup for machine ${machineId}:`, error);
-        await Machine.findByIdAndUpdate(machineId, { training_status: 'failed' });
-    }
-}
-
-function getModelPaths(userId, machineId) {
-    const machineDir = path.join(__dirname, '../models/user_models', `user_${userId}`, `machine_${machineId}`);
-    return {
-        model_file: path.join(machineDir, 'model.h5'),
-        scaler_file: path.join(machineDir, 'scaler.pkl'),
-        columns_file: path.join(machineDir, 'columns.json'),
-        threshold_file: path.join(machineDir, 'threshold.json'),
-    };
-}
-
 // @route   GET /api/dashboard/machine/:machineId/status
-// @desc    Get training status for a specific machine
+// @desc    Get real-time training status for a machine using Server-Sent Events (SSE)
 // @access  Private
 router.get('/machine/:machineId/status', auth, async (req, res) => {
-    try {
-        const { machineId } = req.params;
-        const machine = await Machine.findOne({ _id: machineId, userId: req.user._id });
+    const { machineId } = req.params;
 
-        if (!machine) {
-            return res.status(404).json({ success: false, message: 'Machine not found' });
+    // Set headers for Server-Sent Events
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    const sendStatus = async () => {
+        try {
+            const machine = await Machine.findById(machineId);
+            if (!machine) {
+                res.write(`data: ${JSON.stringify({ success: false, message: 'Machine not found.' })}\\n\\n`);
+                return;
+            }
+            const payload = {
+                success: true,
+                status: machine.training_status,
+                progress: machine.training_progress,
+                message: machine.training_message
+            };
+            res.write(`data: ${JSON.stringify(payload)}\\n\\n`);
+            
+            // If training is done, we can close the connection from the server side.
+            if (machine.training_status === 'completed' || machine.training_status === 'failed') {
+                res.end();
+            }
+        } catch (error) {
+            console.error(`Error fetching status for machine ${machineId}:`, error);
+            res.write(`data: ${JSON.stringify({ success: false, message: 'Error fetching status.' })}\\n\\n`);
         }
+    };
 
-        res.json({
-            success: true,
-            status: machine.training_status,
-            modelStatus: machine.modelStatus,
-            progress: machine.training_progress,
-            message: machine.training_message
-        });
+    const dataInterval = setInterval(sendStatus, 2000);
 
-    } catch (error) {
-        console.error(`Error fetching status for machine ${req.params.machineId}:`, error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
+    // Send a comment every 15 seconds to keep the connection alive
+    const keepAliveInterval = setInterval(() => {
+        res.write(':keep-alive\\n\\n');
+    }, 15000);
+
+    // Clean up intervals when the client closes the connection
+    req.on('close', () => {
+        clearInterval(dataInterval);
+        clearInterval(keepAliveInterval);
+        res.end();
+    });
 });
 
 // Get machine details and sensor data

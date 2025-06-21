@@ -438,41 +438,59 @@ function initAddMachineModal() {
         }
     }
 
+    let eventSource = null;
+
     function startModalPolling(machineId) {
         const progressBar = document.getElementById('modalProgressBar');
         const progressLabel = document.getElementById('modalProgressLabel');
         const finishBtn = document.getElementById('finishBtn');
 
-        pollerId = setInterval(async () => {
+        // Close any existing connection
+        if (eventSource) {
+            eventSource.close();
+        }
+
+        // Use EventSource to connect to our SSE endpoint
+        eventSource = new EventSource(`/api/dashboard/machine/${machineId}/status`);
+
+        eventSource.onopen = () => {
+            console.log("Connection to server opened for status updates.");
+        };
+
+        eventSource.onmessage = (event) => {
             try {
-                const response = await fetch(`/api/dashboard/machine/${machineId}/status`, {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-                });
-                const data = await response.json();
+                const data = JSON.parse(event.data);
                 if (data.success) {
                     progressBar.style.width = `${data.progress || 0}%`;
                     progressLabel.textContent = data.message || 'Processing...';
 
                     if (data.status === 'completed' || data.status === 'failed') {
-                        clearInterval(pollerId);
-                        pollerId = null;
+                        eventSource.close();
+                        eventSource = null;
                         finishBtn.style.display = 'inline-block';
                         progressLabel.textContent = data.status === 'completed' ? 'Training successful!' : `Training failed: ${data.message}`;
                         loadDashboardData(); // Refresh dashboard in the background
                     }
                 } else {
-                    clearInterval(pollerId);
-                    pollerId = null;
+                    eventSource.close();
+                    eventSource = null;
                     progressLabel.textContent = `Error: ${data.message}`;
                     finishBtn.style.display = 'inline-block';
                 }
             } catch (err) {
-                clearInterval(pollerId);
-                pollerId = null;
-                progressLabel.textContent = 'Error: Could not retrieve training status.';
-                finishBtn.style.display = 'inline-block';
+                console.error("Error parsing server event:", err);
+                progressLabel.textContent = 'Error: Invalid data from server.';
+                eventSource.close();
             }
-        }, 2000);
+        };
+
+        eventSource.onerror = (err) => {
+            console.error("EventSource failed:", err);
+            progressLabel.textContent = 'Error: Could not retrieve training status.';
+            finishBtn.style.display = 'inline-block';
+            eventSource.close();
+            eventSource = null;
+        };
     }
 
     form.addEventListener('submit', handleAddMachine);
@@ -982,9 +1000,11 @@ function handleRemoveMachine(machineId) {
         return;
     }
 
-    title.textContent = `Remove ${machine.name}?`;
+    // Use the correct property 'machineName' and provide a fallback.
+    const machineDisplayName = machine.machineName || 'this machine';
+    title.textContent = `Remove ${machineDisplayName}?`;
     text.innerHTML = `
-        <p>Are you sure you want to permanently remove this machine and its associated model?</p>
+        <p>Are you sure you want to permanently remove this machine and all its associated data?</p>
         <p><strong>This action cannot be undone.</strong></p>
     `;
 
