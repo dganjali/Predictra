@@ -175,6 +175,24 @@ function initMachineManagement() {
         });
     }
 
+    // Event delegation for machine actions
+    const machineList = document.getElementById('machineList');
+    if (machineList) {
+        machineList.addEventListener('click', (e) => {
+            const button = e.target.closest('button');
+            if (!button) return;
+
+            const action = button.dataset.action;
+            const id = button.dataset.id;
+
+            if (action === 'view-details') {
+                viewMachineDetails(id);
+            } else if (action === 'calculate-risk') {
+                openPredictionModal(id);
+            }
+        });
+    }
+
     // Initialize prediction modal
     const predictionModal = document.getElementById('predictionModal');
     const closePredictionBtn = document.getElementById('closePredictionModal');
@@ -527,35 +545,24 @@ function displayMachines(machines) {
             <div class="machine-header">
                 <h3>${machine.name}</h3>
                 <div class="machine-badges">
-                    <span class="status-badge ${machine.status || 'N/A'}">${machine.status || 'N/A'}</span>
-                    <span class="criticality-badge ${machine.criticality}">${machine.criticality}</span>
+                    <span class="status-badge ${getStatusColor(machine.status || 'N/A')}">${machine.status || 'N/A'}</span>
                 </div>
             </div>
             <div class="machine-details">
                 <div class="detail-row">
                     <div class="detail-item">
                         <span class="label">Type:</span>
-                        <span class="value">${machine.type.replace('_', ' ')}</span>
+                        <span class="value">${machine.type ? machine.type.replace('_', ' ') : 'N/A'}</span>
                     </div>
                     <div class="detail-item">
-                        <span class="label">SCADA:</span>
-                        <span class="value">${machine.scadaSystem || 'N/A'}</span>
+                        <span class="label">Model Status:</span>
+                        <span class="value">${machine.modelStatus || 'N/A'}</span>
                     </div>
                 </div>
                 <div class="detail-row">
-                    <div class="detail-item">
-                        <span class="label">Location:</span>
-                        <span class="value">${machine.location}</span>
-                    </div>
-                    <div class="detail-item">
+                     <div class="detail-item">
                         <span class="label">Health Score:</span>
-                        <span class="value health-score">${machine.healthScore}%</span>
-                    </div>
-                </div>
-                <div class="detail-row">
-                    <div class="detail-item">
-                        <span class="label">RUL Estimate:</span>
-                        <span class="value">${machine.rulEstimate} days</span>
+                        <span class="value health-score">${machine.healthScore !== undefined ? machine.healthScore + '%' : 'N/A'}</span>
                     </div>
                     <div class="detail-item">
                         <span class="label">Last Updated:</span>
@@ -564,11 +571,11 @@ function displayMachines(machines) {
                 </div>
             </div>
             <div class="machine-actions">
-                <button class="btn btn-secondary btn-sm" onclick="viewMachineDetails('${machine.id}')">
+                <button class="btn btn-secondary btn-sm" data-action="view-details" data-id="${machine._id}">
                     <i class="fas fa-eye"></i> View Details
                 </button>
-                <button class="btn btn-primary btn-sm" onclick="viewAnomalyData('${machine.id}')">
-                    <i class="fas fa-chart-line"></i> Anomaly Data
+                <button class="btn btn-primary btn-sm" data-action="calculate-risk" data-id="${machine._id}">
+                    <i class="fas fa-calculator"></i> Calculate Risk
                 </button>
             </div>
         </div>
@@ -608,7 +615,7 @@ function displayAlerts(alerts) {
 }
 
 function viewMachineDetails(machineId) {
-    const machine = allMachines.find(m => m.id === machineId);
+    const machine = allMachines.find(m => m._id === machineId);
     if (!machine) {
         showMessage('Could not find machine details.', 'error');
         return;
@@ -672,16 +679,14 @@ function viewMachineDetails(machineId) {
 }
 
 function viewAnomalyData(machineId) {
-    // Placeholder for anomaly data view
-    console.log('Viewing anomaly data for:', machineId);
-    // In a real application, this would show anomaly detection results
-    // and training metrics
-    showMessage('Anomaly detection data view coming soon!', 'info');
+    // This function is now replaced by openPredictionModal
+    console.log('viewAnomalyData is deprecated. Use openPredictionModal instead.');
+    showMessage('This feature has been updated to "Calculate Risk".', 'info');
 }
 
 function openPredictionModal(machineId) {
     currentPredictionMachineId = machineId;
-    const machine = allMachines.find(m => m.id === machineId);
+    const machine = allMachines.find(m => m._id === machineId);
     if (!machine) {
         showMessage('Could not find machine details.', 'error');
         return;

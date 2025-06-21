@@ -20,7 +20,7 @@ import sys
 # --- Configuration ---
 BASE_MODELS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'user_models')
 SEQUENCE_LEN = 10
-N_EPOCHS = 20
+N_EPOCHS = 5
 BATCH_SIZE = 32
 
 # --- Path Management ---
