@@ -676,13 +676,23 @@ router.post('/get-csv-headers', auth, upload.single('trainingData'), async (req,
     try {
         const fileContent = fs.readFileSync(filePath, 'utf8');
         const firstLine = fileContent.split(/\\r?\\n/)[0];
-        let headers = firstLine.split(';');
+        
+        // Simple delimiter detection
+        const commaCount = (firstLine.match(/,/g) || []).length;
+        const semicolonCount = (firstLine.match(/;/g) || []).length;
+        const delimiter = commaCount > semicolonCount ? ',' : ';';
 
-        // Filter out timestamp columns and any empty headers
-        headers = headers.filter(h => h && h.trim().toLowerCase() !== 'time_stamp' && h.trim().toLowerCase() !== 'timestamp');
+        let headers = firstLine.split(delimiter);
+
+        // Filter out timestamp columns and any empty/whitespace-only headers
+        headers = headers.map(h => h.trim()).filter(h => h && h.toLowerCase() !== 'time_stamp' && h.toLowerCase() !== 'timestamp');
         
         // Clean up the uploaded file immediately
         fs.unlinkSync(filePath);
+
+        if (headers.length === 0) {
+            return res.status(400).json({ success: false, message: 'Could not find any valid header columns in the uploaded file.' });
+        }
 
         res.json({ success: true, headers: headers });
 

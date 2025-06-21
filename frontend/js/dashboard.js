@@ -305,17 +305,19 @@ async function handleGoToStep2() {
         const result = await response.json();
         progressContainer.style.display = 'none';
 
-        if (response.ok && result.success) {
-            machineConfig.headers = result.headers;
-            displayCsvHeaders(result.headers);
-        } else {
-            showMessage(result.message || 'Could not load CSV headers.', 'error');
-            navigateSteps(1); // Go back if error
+        if (!response.ok || !result.success) {
+            // Use the specific error message from the backend if available
+            const errorMessage = result.message || `An error occurred: ${response.statusText}`;
+            throw new Error(errorMessage);
         }
+
+        const headers = result.headers;
+        machineConfig.headers = headers;
+        displayCsvHeaders(headers);
     } catch (error) {
-        progressContainer.style.display = 'none';
-        showMessage('An error occurred while reading the file.', 'error');
-        navigateSteps(1);
+        console.error('Error in step 1:', error);
+        alert(`Failed to process CSV file: ${error.message}`);
+        resetAddMachineModal(); // Revert to step 1 on failure
     }
 }
 

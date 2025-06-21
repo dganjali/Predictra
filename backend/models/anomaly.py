@@ -61,7 +61,16 @@ def train_model_for_machine(user_id: str, machine_id: str, data_path: str, senso
     
     try:
         print(f"Loading data from {data_path} for machine {machine_id} of user {user_id}...")
-        df = pd.read_csv(data_path, sep=';', index_col='time_stamp', parse_dates=True, nrows=150000)
+
+        # Detect delimiter
+        with open(data_path, 'r') as f:
+            first_line = f.readline()
+            if first_line.count(';') > first_line.count(','):
+                delimiter = ';'
+            else:
+                delimiter = ','
+
+        df = pd.read_csv(data_path, sep=delimiter, index_col='time_stamp', parse_dates=True, nrows=150000)
         df.dropna(axis=1, how='all', inplace=True)
 
         # Validate that the user-provided sensor columns exist in the CSV file.
