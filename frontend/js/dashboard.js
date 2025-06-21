@@ -187,8 +187,10 @@ function initMachineManagement() {
     initAddMachineModal();
     
     // Initialize file upload functionality
-    initFileUpload();
+    // initFileUpload(); // This seems to be causing issues, let's look at this later if needed
     
+    // Initialize sensor selection - REMOVED
+    // initSensorSelection(); 
     // Initialize sensor selection
     initSensorSelection();
 }
