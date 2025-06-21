@@ -724,12 +724,6 @@ async function trainModel(machine, user) {
     const userId = user._id.toString();
     
     try {
-        await Machine.findByIdAndUpdate(machineId, { 
-            training_status: 'in_progress',
-            training_progress: 50,
-            training_message: 'Checking pre-trained model availability...' 
-        });
-        
         // Check if pre-trained configuration exists
         const pretrainedConfigPath = path.join(__dirname, '../models/pretrained_config.json');
         if (!fs.existsSync(pretrainedConfigPath)) {
@@ -739,12 +733,7 @@ async function trainModel(machine, user) {
         const pretrainedConfig = JSON.parse(fs.readFileSync(pretrainedConfigPath, 'utf8'));
         const pretrained = pretrainedConfig.pretrained_model;
         
-        await Machine.findByIdAndUpdate(machineId, { 
-            training_progress: 100,
-            training_message: 'Pre-trained model verified successfully!' 
-        });
-        
-        // Update machine with success status and pre-trained model parameters
+        // Update machine with success status and pre-trained model parameters immediately
         const modelParams = {
             threshold: pretrained.threshold,
             mae_threshold: pretrained.mae_threshold,
@@ -766,16 +755,16 @@ async function trainModel(machine, user) {
             training_progress: 100,
             model_params: modelParams,
             modelStatus: 'trained',
-            training_message: 'Model trained successfully using pre-trained parameters!',
+            training_message: 'Pre-trained model applied instantly!',
             lastTrained: new Date()
         });
         
-        console.log(`✅ Pre-trained model verified for machine ${machineId}`);
+        console.log(`✅ Pre-trained model applied instantly for machine ${machineId}`);
         console.log(`📊 Using pre-trained parameters: threshold=${pretrained.threshold}`);
         console.log(`🎯 Model source: ${pretrained.source_data} (${pretrained.trained_columns.length} sensors)`);
         
     } catch (error) {
-        console.error(`❌ Error verifying pre-trained model for machine ${machineId}:`, error);
+        console.error(`❌ Error applying pre-trained model for machine ${machineId}:`, error);
         
         await Machine.findByIdAndUpdate(machineId, {
             training_status: 'failed',

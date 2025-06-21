@@ -703,7 +703,7 @@ function getTrainingStatusHTML(status) {
     const statusMap = {
         'pending': { text: 'Pending Training', icon: 'fa-clock', color: '#17a2b8' },
         'in_progress': { text: 'Checking Pre-trained Model...', icon: 'fa-sync fa-spin', color: '#ffc107' },
-        'completed': { text: 'Pre-trained Model Applied', icon: 'fa-check-circle', color: '#28a745' },
+        'completed': { text: 'Instant Training Complete', icon: 'fa-check-circle', color: '#28a745' },
         'failed': { text: 'Training Failed', icon: 'fa-times-circle', color: '#dc3545' }
     };
 
@@ -734,7 +734,7 @@ function startTrainingStatusPolling(machineId) {
             console.log(`Starting poller for machine ${machineId}`);
             activePollers[machineId] = setInterval(() => {
                 pollMachineStatus(machineId);
-            }, 3000); // Poll every 3 seconds
+            }, 1000); // Poll every 1 second for instant response
         }
     });
 }
