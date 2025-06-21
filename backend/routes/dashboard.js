@@ -1,6 +1,5 @@
 const express = require('express');
 const { auth } = require('../middleware/auth');
-const { authenticateToken } = require('../middleware/auth');
 const User = require('../models/User');
 const multer = require('multer');
 const path = require('path');
@@ -115,7 +114,7 @@ router.get('/alerts', auth, async (req, res) => {
 });
 
 // Get dashboard data
-router.get('/data', authenticateToken, async (req, res) => {
+router.get('/data', auth, async (req, res) => {
     try {
         const user = await User.findById(req.user.id).select('-password');
         
@@ -178,7 +177,7 @@ router.get('/data', authenticateToken, async (req, res) => {
 });
 
 // Add new machine with SCADA configuration and training data
-router.post('/add-machine', authenticateToken, upload.single('trainingData'), async (req, res) => {
+router.post('/add-machine', auth, upload.single('trainingData'), async (req, res) => {
     try {
         // Parse machine data from JSON string
         const machineData = JSON.parse(req.body.machineData);
@@ -269,7 +268,7 @@ router.post('/add-machine', authenticateToken, upload.single('trainingData'), as
 });
 
 // Get machine details and sensor data
-router.get('/machine/:machineId', authenticateToken, async (req, res) => {
+router.get('/machine/:machineId', auth, async (req, res) => {
     try {
         const { machineId } = req.params;
         
@@ -325,7 +324,7 @@ router.get('/machine/:machineId', authenticateToken, async (req, res) => {
 });
 
 // Get sensor data for a machine
-router.get('/machine/:machineId/sensor-data', authenticateToken, async (req, res) => {
+router.get('/machine/:machineId/sensor-data', auth, async (req, res) => {
     try {
         const { machineId } = req.params;
         const { hours = 24 } = req.query;
