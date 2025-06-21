@@ -124,11 +124,10 @@ const machineSchema = new mongoose.Schema({
   
   // Sensor Configuration
   sensors: [{
+    sensorId: String,
+    name: String,
     type: String,
-    enum: [
-      'temperature', 'vibration', 'pressure', 'flow_rate', 'current',
-      'voltage', 'speed', 'torque', 'oil_level', 'noise', 'humidity', 'power_factor'
-    ]
+    unit: String
   }],
   
   // Training Data Information
@@ -137,26 +136,22 @@ const machineSchema = new mongoose.Schema({
     trim: true,
     maxlength: [500, 'Data description cannot exceed 500 characters']
   },
-  trainingDataFile: {
-    type: String, // File path
-    trim: true
+  trainingDataPath: {
+    type: String
   },
   
   // Model Information
   modelStatus: {
     type: String,
-    enum: ['pending', 'training', 'trained', 'failed'],
-    default: 'pending'
+    enum: ['untrained', 'training', 'trained', 'failed'],
+    default: 'untrained'
+  },
+  statusDetails: {
+    type: String
   },
   trainingMetrics: {
-    accuracy: Number,
-    precision: Number,
-    recall: Number,
-    f1Score: Number,
-    trainingTime: Number,
-    dataPoints: Number,
-    features: Number,
-    algorithm: String
+    type: Map,
+    of: String
   },
   lastTrained: {
     type: Date
@@ -185,6 +180,13 @@ const machineSchema = new mongoose.Schema({
   lastUpdated: {
     type: Date,
     default: Date.now
+  },
+  
+  // Maintenance Information
+  maintenanceStatus: {
+    type: String,
+    enum: ['low', 'medium', 'high'],
+    default: 'medium'
   }
 }, {
   timestamps: true
