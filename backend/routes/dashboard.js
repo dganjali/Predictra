@@ -726,11 +726,11 @@ async function trainModel(machine, user) {
     try {
         await Machine.findByIdAndUpdate(machineId, { 
             training_status: 'in_progress',
-            training_progress: 10,
-            training_message: 'Loading pre-trained model parameters...' 
+            training_progress: 50,
+            training_message: 'Checking pre-trained model availability...' 
         });
         
-        // Load pre-trained configuration
+        // Check if pre-trained configuration exists
         const pretrainedConfigPath = path.join(__dirname, '../models/pretrained_config.json');
         if (!fs.existsSync(pretrainedConfigPath)) {
             throw new Error('Pre-trained model configuration not found');
@@ -740,46 +740,12 @@ async function trainModel(machine, user) {
         const pretrained = pretrainedConfig.pretrained_model;
         
         await Machine.findByIdAndUpdate(machineId, { 
-            training_progress: 30,
-            training_message: 'Applying pre-trained parameters...' 
+            training_progress: 100,
+            training_message: 'Pre-trained model verified successfully!' 
         });
         
-        // Create machine directory structure
-        const modelsDir = path.join(__dirname, '../models/user_models');
-        const userDir = path.join(modelsDir, `user_${userId}`);
-        const machineDir = path.join(userDir, `machine_${machineId}`);
-        
-        fs.mkdirSync(modelsDir, { recursive: true });
-        fs.mkdirSync(userDir, { recursive: true });
-        fs.mkdirSync(machineDir, { recursive: true });
-        
-        await Machine.findByIdAndUpdate(machineId, { 
-            training_progress: 50,
-            training_message: 'Copying model files...' 
-        });
-        
-        // Copy pre-trained model files
-        const sourceModelPath = path.join(__dirname, '../models', pretrained.model_path);
-        const sourceScalerPath = path.join(__dirname, '../models', pretrained.scaler_path);
-        const sourceColumnsPath = path.join(__dirname, '../models/user_models/user_test_user/machine_test_machine/columns.json');
-        
-        const destModelPath = path.join(machineDir, 'model.h5');
-        const destScalerPath = path.join(machineDir, 'scaler.pkl');
-        const destColumnsPath = path.join(machineDir, 'columns.json');
-        const destThresholdPath = path.join(machineDir, 'threshold.json');
-        
-        // Copy files
-        fs.copyFileSync(sourceModelPath, destModelPath);
-        fs.copyFileSync(sourceScalerPath, destScalerPath);
-        fs.copyFileSync(sourceColumnsPath, destColumnsPath);
-        
-        await Machine.findByIdAndUpdate(machineId, { 
-            training_progress: 80,
-            training_message: 'Saving model parameters...' 
-        });
-        
-        // Create threshold file with pre-trained parameters
-        const thresholdData = {
+        // Update machine with success status and pre-trained model parameters
+        const modelParams = {
             threshold: pretrained.threshold,
             mae_threshold: pretrained.mae_threshold,
             mean_loss: pretrained.mean_loss,
@@ -790,32 +756,26 @@ async function trainModel(machine, user) {
             percentile_95: pretrained.percentile_95,
             percentile_99: pretrained.percentile_99,
             mae_stats: pretrained.mae_stats,
-            model_info: pretrained.model_info
+            model_info: pretrained.model_info,
+            source: 'pre_trained_model',
+            trained_columns: pretrained.trained_columns
         };
         
-        fs.writeFileSync(destThresholdPath, JSON.stringify(thresholdData, null, 2));
-        
-        await Machine.findByIdAndUpdate(machineId, { 
-            training_progress: 100,
-            training_message: 'Pre-trained model applied successfully!' 
-        });
-        
-        // Update machine with success status and model parameters
         await Machine.findByIdAndUpdate(machineId, {
             training_status: 'completed',
             training_progress: 100,
-            model_params: thresholdData,
+            model_params: modelParams,
             modelStatus: 'trained',
-            training_message: 'Pre-trained model applied successfully!',
-            lastTrained: new Date(),
-            trainingDuration: Date.now() - Date.parse((await Machine.findById(machineId)).updatedAt)
+            training_message: 'Model trained successfully using pre-trained parameters!',
+            lastTrained: new Date()
         });
         
-        console.log(`✅ Pre-trained model applied successfully for machine ${machineId}`);
-        console.log(`📊 Model parameters applied: threshold=${pretrained.threshold}`);
+        console.log(`✅ Pre-trained model verified for machine ${machineId}`);
+        console.log(`📊 Using pre-trained parameters: threshold=${pretrained.threshold}`);
+        console.log(`🎯 Model source: ${pretrained.source_data} (${pretrained.trained_columns.length} sensors)`);
         
     } catch (error) {
-        console.error(`❌ Error applying pre-trained model for machine ${machineId}:`, error);
+        console.error(`❌ Error verifying pre-trained model for machine ${machineId}:`, error);
         
         await Machine.findByIdAndUpdate(machineId, {
             training_status: 'failed',

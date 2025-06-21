@@ -702,8 +702,8 @@ function getTrainingStatusHTML(status) {
 
     const statusMap = {
         'pending': { text: 'Pending Training', icon: 'fa-clock', color: '#17a2b8' },
-        'in_progress': { text: 'Model Training...', icon: 'fa-sync fa-spin', color: '#ffc107' },
-        'completed': { text: 'Model Trained', icon: 'fa-check-circle', color: '#28a745' },
+        'in_progress': { text: 'Checking Pre-trained Model...', icon: 'fa-sync fa-spin', color: '#ffc107' },
+        'completed': { text: 'Pre-trained Model Applied', icon: 'fa-check-circle', color: '#28a745' },
         'failed': { text: 'Training Failed', icon: 'fa-times-circle', color: '#dc3545' }
     };
 
@@ -888,8 +888,10 @@ function viewMachineDetails(machineId) {
                 <h3><i class="fas fa-brain"></i> Model Details</h3>
                 <div class="details-subsection">
                     ${createDetail('Training Status', `<span class="status-badge ${machine.training_status}">${machine.training_status || 'none'}</span>`)}
+                    ${isTrained ? createDetail('Model Source', trainingParams.source === 'pre_trained_model' ? 'Pre-trained Model (0.csv)' : 'Custom Training') : ''}
                     ${isTrained ? createDetail('Anomaly Threshold', trainingParams.threshold ? trainingParams.threshold.toFixed(4) : 'N/A') : ''}
                     ${isTrained ? createDetail('Avg. Training Loss', trainingParams.mean_loss ? trainingParams.mean_loss.toFixed(4) : 'N/A') : ''}
+                    ${isTrained && trainingParams.trained_columns ? createDetail('Trained Sensors', trainingParams.trained_columns.length + ' sensors') : ''}
                 </div>
             </div>
 
