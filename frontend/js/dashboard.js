@@ -849,7 +849,7 @@ function viewAnomalyData(machineId) {
 
 function openPredictionModal(machineId) {
     currentPredictionMachineId = machineId;
-    const machine = allMachines.find(m => m.id === machineId);
+    const machine = allMachines.find(m => m._id === machineId);
     if (!machine) {
         showMessage('Could not find machine details.', 'error');
         return;
