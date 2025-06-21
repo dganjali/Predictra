@@ -6,6 +6,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
+const readline = require('readline');
 
 const router = express.Router();
 
@@ -663,49 +664,63 @@ router.delete('/machine/:id', auth, async (req, res) => {
     }
 });
 
-// @route   POST /api/dashboard/get-csv-headers
-// @desc    Upload a CSV and return its headers
-// @access  Private
-router.post('/get-csv-headers', auth, upload.single('trainingData'), async (req, res) => {
+// This endpoint receives a CSV, reads the header row, and returns the column names.
+router.post('/get-csv-headers', upload.single('trainingData'), (req, res) => {
     if (!req.file) {
         return res.status(400).json({ success: false, message: 'No file uploaded.' });
     }
 
     const filePath = req.file.path;
+    const readable = fs.createReadStream(filePath);
+    const reader = readline.createInterface({ input: readable });
+    let isHandled = false;
 
-    try {
-        const fileContent = fs.readFileSync(filePath, 'utf8');
-        const firstLine = fileContent.split(/\\r?\\n/)[0];
+    const cleanupAndRespond = (status, json) => {
+        if (isHandled) return;
+        isHandled = true;
+
+        reader.close();
+        readable.destroy();
         
-        // Simple delimiter detection
-        const commaCount = (firstLine.match(/,/g) || []).length;
-        const semicolonCount = (firstLine.match(/;/g) || []).length;
-        const delimiter = commaCount > semicolonCount ? ',' : ';';
-
-        let headers = firstLine.split(delimiter);
-
-        // Filter out timestamp columns and any empty/whitespace-only headers
-        headers = headers.map(h => h.trim()).filter(h => h && h.toLowerCase() !== 'time_stamp' && h.toLowerCase() !== 'timestamp');
-        
-        // Clean up the uploaded file immediately
-        fs.unlinkSync(filePath);
-
-        if (headers.length === 0) {
-            return res.status(400).json({ success: false, message: 'Could not find any valid header columns in the uploaded file.' });
-        }
-
-        res.json({ success: true, headers: headers });
-
-    } catch (error) {
-        console.error('Error reading CSV headers:', error);
-        
-        // Ensure cleanup even on error
         if (fs.existsSync(filePath)) {
             fs.unlinkSync(filePath);
         }
-        
-        res.status(500).json({ success: false, message: 'Failed to read file headers.' });
-    }
+
+        if (!res.headersSent) {
+            res.status(status).json(json);
+        }
+    };
+
+    reader.on('line', (firstLine) => {
+        try {
+            const commaCount = (firstLine.match(/,/g) || []).length;
+            const semicolonCount = (firstLine.match(/;/g) || []).length;
+            const delimiter = commaCount > semicolonCount ? ',' : ';';
+            let headers = firstLine.split(delimiter);
+            
+            headers = headers.map(h => h.trim()).filter(h => h && h.toLowerCase() !== 'time_stamp' && h.toLowerCase() !== 'timestamp');
+
+            if (headers.length === 0) {
+                cleanupAndRespond(400, { success: false, message: 'Could not find any valid header columns in the uploaded file.' });
+            } else {
+                cleanupAndRespond(200, { success: true, headers: headers });
+            }
+        } catch (error) {
+            console.error('Error processing header line:', error);
+            cleanupAndRespond(500, { success: false, message: 'An internal server error occurred while processing headers.' });
+        }
+    });
+
+    reader.on('close', () => {
+        if (!isHandled) {
+            cleanupAndRespond(400, { success: false, message: 'Uploaded file is empty or invalid.' });
+        }
+    });
+
+    reader.on('error', (err) => {
+        console.error('Error reading file stream:', err);
+        cleanupAndRespond(500, { success: false, message: 'Failed to read the uploaded file.' });
+    });
 });
 
 // Placeholder for simulating data
