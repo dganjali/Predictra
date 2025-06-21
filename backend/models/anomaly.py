@@ -79,15 +79,48 @@ def train_model_for_machine(user_id: str, machine_id: str, data_path: str, senso
     try:
         print(f"Loading data from {data_path} for machine {machine_id} of user {user_id}...")
 
+        # Define the maximum size of data to read (5MB)
+        MAX_BYTES = 5 * 1024 * 1024
+
         # Detect delimiter
-        with open(data_path, 'r') as f:
+        with open(data_path, 'r', errors='ignore') as f:
             first_line = f.readline()
             if first_line.count(';') > first_line.count(','):
                 delimiter = ';'
             else:
                 delimiter = ','
+        
+        # Read the CSV in chunks to limit memory usage and enforce size limit
+        chunk_list = []
+        total_bytes_read = 0
+        
+        # Use an iterator to process the file in chunks
+        csv_iterator = pd.read_csv(
+            data_path, 
+            sep=delimiter, 
+            index_col='time_stamp', 
+            parse_dates=True,
+            chunksize=10000,  # Read 10,000 rows at a time
+            low_memory=False,
+            on_bad_lines='skip'
+        )
 
-        df = pd.read_csv(data_path, sep=delimiter, index_col='time_stamp', parse_dates=True, nrows=150000)
+        for chunk in csv_iterator:
+            chunk_bytes = chunk.memory_usage(deep=True).sum()
+            if total_bytes_read + chunk_bytes > MAX_BYTES and total_bytes_read > 0:
+                # If adding the next chunk exceeds the limit, stop.
+                # Ensure we have at least one chunk to avoid errors.
+                break
+            chunk_list.append(chunk)
+            total_bytes_read += chunk_bytes
+
+        if not chunk_list:
+             return {"success": False, "error": "The data file is empty or could not be read."}
+
+        df = pd.concat(chunk_list)
+        
+        print(f"Successfully loaded {total_bytes_read / (1024*1024):.2f} MB of data.")
+
         df.dropna(axis=1, how='all', inplace=True)
 
         # Validate that the user-provided sensor columns exist in the CSV file.
