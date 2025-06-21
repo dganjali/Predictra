@@ -232,9 +232,11 @@ function initAddMachineModal() {
     const nextBtn = document.getElementById('nextBtn');
     const prevBtn = document.getElementById('prevBtn');
     const submitBtn = document.getElementById('submitBtn');
+    const finishBtn = document.getElementById('finishBtn');
     const steps = [...document.querySelectorAll('.form-step')];
     const indicators = [...document.querySelectorAll('.step-indicator')];
     let currentStep = 0;
+    let pollerId = null; // To hold the interval ID for the modal poller
 
     const openModal = () => {
         currentStep = 0;
@@ -247,8 +249,15 @@ function initAddMachineModal() {
         form.reset();
         currentStep = 0;
         updateFormSteps();
+        if (pollerId) {
+            clearInterval(pollerId);
+            pollerId = null;
+        }
         document.getElementById('columnCheckboxes').innerHTML = '';
         document.getElementById('sensorConfigContainer').innerHTML = '';
+        document.getElementById('finishBtn').style.display = 'none';
+        document.getElementById('modalProgressLabel').textContent = 'Initializing...';
+        document.getElementById('modalProgressBar').style.width = '0%';
     };
 
     document.getElementById('addMachineBtn').addEventListener('click', openModal);
@@ -258,6 +267,7 @@ function initAddMachineModal() {
         addFirstMachineBtn.addEventListener('click', openModal);
     }
     closeModalBtn.addEventListener('click', closeModal);
+    finishBtn.addEventListener('click', closeModal);
 
     nextBtn.addEventListener('click', () => {
         if (validateStep(currentStep)) {
@@ -282,9 +292,10 @@ function initAddMachineModal() {
             indicator.classList.toggle('active', index === currentStep);
         });
 
-        prevBtn.style.display = currentStep > 0 ? 'inline-block' : 'none';
-        nextBtn.style.display = currentStep < steps.length - 1 ? 'inline-block' : 'none';
-        submitBtn.style.display = currentStep === steps.length - 1 ? 'inline-block' : 'none';
+        const isTrainingStep = currentStep === 3;
+        prevBtn.style.display = (currentStep > 0 && !isTrainingStep) ? 'inline-block' : 'none';
+        nextBtn.style.display = (currentStep < steps.length - 2) ? 'inline-block' : 'none';
+        submitBtn.style.display = (currentStep === steps.length - 2) ? 'inline-block' : 'none';
     }
 
     function validateStep(stepIndex) {
@@ -398,51 +409,70 @@ function initAddMachineModal() {
         });
         formData.append('sensors', JSON.stringify(sensors));
         
-        const submitBtn = form.querySelector('#submitBtn');
-        submitBtn.disabled = true;
-        submitBtn.textContent = 'Processing...';
-        
+        // --- UI transition to progress view ---
+        currentStep = 3;
+        updateFormSteps();
         showMessage('Uploading data and starting training...', 'info');
-        
+
         try {
-            const response = await fetch('/api/dashboard/machines', { 
-                method: 'POST', 
-                headers: { 'Authorization': `Bearer ${token}` }, 
-                body: formData 
-            });
-            
-            if (!response.ok) {
-                if (response.status === 500) {
-                    console.error('Server error (500) when adding machine');
-                    showMessage('Server error during model training. Please check server logs for details.', 'error');
-                    return;
-                }
-            }
-            
+            const response = await fetch('/api/dashboard/machines', { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: formData });
             const data = await response.json();
+            
             if (!data.success) {
                 showMessage(`Error: ${data.message}`, 'error');
+                // Allow user to go back
+                currentStep = 2; 
+                updateFormSteps();
                 return;
             }
             
-            showMessage('Machine added successfully! Training process has started.', 'success');
-            closeModal();
-            loadDashboardData();
-            
-            // Wait a moment and then poll for training status
-            setTimeout(() => {
-                if (data.machine && data.machine._id) {
-                    startTrainingStatusPolling(data.machine._id);
-                }
-            }, 2000);
-            
+            // Start polling for progress inside the modal
+            startModalPolling(data.machine._id);
+
         } catch (error) {
             console.error('Error adding machine:', error);
-            showMessage('Network error when adding machine. Please check your connection and try again.', 'error');
-        } finally {
-            submitBtn.disabled = false;
-            submitBtn.textContent = 'Add Machine & Train';
+            showMessage('Network error when adding machine. Please try again.', 'error');
+            // Allow user to go back
+            currentStep = 2;
+            updateFormSteps();
         }
+    }
+
+    function startModalPolling(machineId) {
+        const progressBar = document.getElementById('modalProgressBar');
+        const progressLabel = document.getElementById('modalProgressLabel');
+        const finishBtn = document.getElementById('finishBtn');
+
+        pollerId = setInterval(async () => {
+            try {
+                const response = await fetch(`/api/dashboard/machine/${machineId}/status`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                const data = await response.json();
+                if (data.success) {
+                    progressBar.style.width = `${data.progress || 0}%`;
+                    progressLabel.textContent = data.message || 'Processing...';
+
+                    if (data.status === 'completed' || data.status === 'failed') {
+                        clearInterval(pollerId);
+                        pollerId = null;
+                        finishBtn.style.display = 'inline-block';
+                        progressLabel.textContent = data.status === 'completed' ? 'Training successful!' : `Training failed: ${data.message}`;
+                        loadDashboardData(); // Refresh dashboard in the background
+                    }
+                } else {
+                    clearInterval(pollerId);
+                    pollerId = null;
+                    progressLabel.textContent = `Error: ${data.message}`;
+                    finishBtn.style.display = 'inline-block';
+                }
+            } catch (err) {
+                clearInterval(pollerId);
+                pollerId = null;
+                progressLabel.textContent = 'Error: Could not retrieve training status.';
+                finishBtn.style.display = 'inline-block';
+            }
+        }, 2000);
     }
 
     form.addEventListener('submit', handleAddMachine);

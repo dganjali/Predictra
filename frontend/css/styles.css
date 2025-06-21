@@ -2118,4 +2118,13 @@ a:hover {
 .sensor-config-item label {
     font-weight: bold;
     color: #555;
+}
+
+.training-progress-view {
+    text-align: center;
+    padding: 2rem;
+}
+
+.training-progress-view .progress-bar-container {
+    margin: 1rem 0;
 } 

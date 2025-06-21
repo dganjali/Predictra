@@ -237,6 +237,24 @@
                     </div>
                 </div>
 
+                <!-- Step 4: Training Progress -->
+                <div class="form-step" id="formStep4" style="display: none;">
+                    <div class="step-header">
+                        <i class="fas fa-cogs fa-spin"></i>
+                        <div>
+                            <h4>Training in Progress...</h4>
+                            <p>Please keep this window open. The model is being trained with your data.</p>
+                        </div>
+                    </div>
+                    <div class="training-progress-view">
+                         <div id="modalProgressContainer" class="progress-bar-container">
+                            <div id="modalProgressBar" class="progress-bar" style="width: 0%;"></div>
+                        </div>
+                        <p id="modalProgressLabel" class="status-details-text">Initializing...</p>
+                        <button type="button" class="btn btn-primary" id="finishBtn" style="display: none; margin-top: 1rem;">Finish</button>
+                    </div>
+                </div>
+
                 <!-- Navigation -->
                 <div class="form-actions">
                     <button type="button" class="btn btn-secondary" id="prevBtn" style="display: none;">Previous</button>
@@ -245,6 +263,7 @@
                 </div>
                  <div class="step-indicator-container">
                     <span class="step-indicator active"></span>
+                    <span class="step-indicator"></span>
                     <span class="step-indicator"></span>
                     <span class="step-indicator"></span>
                 </div>
