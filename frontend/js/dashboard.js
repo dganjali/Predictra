@@ -334,10 +334,76 @@ function initTrainMachineModal() {
     };
 
     closeModalBtn.addEventListener('click', closeModal);
-    finishBtn.addEventListener('click', () => {
-        // Trigger form submission instead of just closing
-        const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
-        form.dispatchEvent(submitEvent);
+    finishBtn.addEventListener('click', async () => {
+        console.log('Finish button clicked!');
+        // Directly handle the form submission for the Finish button
+        if (!currentTrainMachineId) {
+            console.log('No currentTrainMachineId found');
+            showMessage('No machine selected for training.', 'error');
+            return;
+        }
+
+        console.log('Current train machine ID:', currentTrainMachineId);
+
+        // Ensure sensor configuration UI is generated if not already done
+        const sensorConfigContainer = document.getElementById('sensorConfigContainerTrain');
+        if (sensorConfigContainer.children.length === 0) {
+            console.log('Generating sensor config UI...');
+            generateSensorConfigUI();
+        }
+
+        const formData = new FormData(form);
+        const featureColumns = [...modal.querySelectorAll('input[name="columns"]:checked')].map(cb => cb.value);
+        
+        console.log('Selected feature columns:', featureColumns);
+        
+        if (featureColumns.length === 0) {
+            console.log('No feature columns selected');
+            showMessage('Please select at least one sensor column.', 'error');
+            return;
+        }
+
+        const requiredColumns = originalCsvHeaders.filter(h => idTsSynonyms.includes(h.toLowerCase()));
+        const allColumns = [...new Set([...featureColumns, ...requiredColumns])];
+        formData.delete('columns');
+        formData.append('columns', JSON.stringify(allColumns));
+        
+        const sensors = featureColumns.map(column => ({
+            sensorId: column,
+            name: formData.get(`sensor_display_${column}`) || column,
+            unit: formData.get(`sensor_unit_${column}`) || ''
+        }));
+        
+        console.log('Sensors configuration:', sensors);
+        
+        featureColumns.forEach(column => {
+            formData.delete(`sensor_display_${column}`);
+            formData.delete(`sensor_unit_${column}`);
+        });
+        formData.append('sensors', JSON.stringify(sensors));
+
+        try {
+            console.log('Sending request to backend...');
+            // Save sensor configuration and apply pre-trained parameters
+            const response = await fetch(`/api/dashboard/machine/${currentTrainMachineId}/train`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                body: formData
+            });
+            const data = await response.json();
+            console.log('Backend response:', data);
+            if (!data.success) {
+                showMessage(`Error: ${data.message}`, 'error');
+            } else {
+                // Close modal and refresh dashboard
+                closeModal();
+                loadDashboardData();
+                showMessage('Sensor configuration saved and pre-trained model applied!', 'success');
+            }
+        } catch (error) {
+            console.error('Error submitting form:', error);
+            showMessage('Network error. Could not save configuration.', 'error');
+        }
     });
     
     nextBtn.addEventListener('click', () => {
@@ -406,49 +472,6 @@ function initTrainMachineModal() {
             container.appendChild(item);
         });
     }
-
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        if (!validateStep(2) || !currentTrainMachineId) return;
-
-        const formData = new FormData(form);
-        const featureColumns = [...modal.querySelectorAll('input[name="columns"]:checked')].map(cb => cb.value);
-        const requiredColumns = originalCsvHeaders.filter(h => idTsSynonyms.includes(h.toLowerCase()));
-        const allColumns = [...new Set([...featureColumns, ...requiredColumns])];
-        formData.delete('columns');
-        formData.append('columns', JSON.stringify(allColumns));
-        
-        const sensors = featureColumns.map(column => ({
-            sensorId: column,
-            name: formData.get(`sensor_display_${column}`),
-            unit: formData.get(`sensor_unit_${column}`)
-        }));
-        featureColumns.forEach(column => {
-            formData.delete(`sensor_display_${column}`);
-            formData.delete(`sensor_unit_${column}`);
-        });
-        formData.append('sensors', JSON.stringify(sensors));
-
-        try {
-            // Save sensor configuration and apply pre-trained parameters
-            const response = await fetch(`/api/dashboard/machine/${currentTrainMachineId}/train`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                body: formData
-            });
-            const data = await response.json();
-            if (!data.success) {
-                showMessage(`Error: ${data.message}`, 'error');
-            } else {
-                // Close modal and refresh dashboard
-                closeModal();
-                loadDashboardData();
-                showMessage('Sensor configuration saved and pre-trained model applied!', 'success');
-            }
-        } catch (error) {
-            showMessage('Network error. Could not save configuration.', 'error');
-        }
-    });
 }
 
 function startTrainPolling(machineId) {
@@ -915,15 +938,22 @@ function viewAnomalyData(machineId) {
 }
 
 function openPredictionModal(machineId) {
+    console.log('Opening prediction modal for machine:', machineId);
     currentPredictionMachineId = machineId;
     const machine = allMachines.find(m => m._id === machineId);
     if (!machine) {
+        console.log('Machine not found in allMachines array');
         showMessage('Could not find machine details.', 'error');
         return;
     }
 
+    console.log('Machine found:', machine);
+    console.log('Machine sensors:', machine.sensors);
+    console.log('Machine modelStatus:', machine.modelStatus);
+
     // Check if machine is trained
     if (machine.modelStatus !== 'trained') {
+        console.log('Machine model is not trained');
         showMessage('This machine model is not trained yet. Please train the model first.', 'error');
         return;
     }
@@ -937,8 +967,10 @@ function openPredictionModal(machineId) {
     resultContainer.style.display = 'none';
 
     if (!machine.sensors || machine.sensors.length === 0) {
+        console.log('No sensors found for machine');
         formBody.innerHTML = `<p class="text-center">This machine has no configured sensors for prediction.</p>`;
     } else {
+        console.log('Generating form for sensors:', machine.sensors);
         formBody.innerHTML = machine.sensors.map(sensor => `
             <div class="form-group">
                 <label for="sensor-${sensor.sensorId}">${sensor.name} (${sensor.unit})</label>

@@ -170,6 +170,7 @@ router.get('/data', auth, async (req, res) => {
                 lastUpdated: machine.lastUpdated,
                 sensors: machine.sensors,
                 training_status: machine.training_status,
+                modelStatus: machine.modelStatus,
                 model_params: machine.model_params,
                 // Add any other fields from the schema you want to expose
             })),
