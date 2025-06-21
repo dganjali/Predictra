@@ -424,8 +424,8 @@
 
                 <!-- Training Data Upload -->
                 <div class="form-section">
-                    <h3>Anomaly Detection Training Data</h3>
-                    <p class="section-description">Upload sequential sensor data snapshots for training the anomaly detection algorithm. Data should include timestamps and sensor readings.</p>
+                    <h3>Training Data Upload</h3>
+                    <p class="section-description">Upload sensor data for training the anomaly detection model. Data should include timestamps and sensor readings.</p>
                     
                     <div class="form-group">
                         <label for="trainingData">Training Data File</label>
@@ -443,85 +443,6 @@
                     <div class="form-group">
                         <label for="dataDescription">Data Description</label>
                         <textarea id="dataDescription" name="dataDescription" rows="3" placeholder="Describe the data: time period, operating conditions, known anomalies, etc."></textarea>
-                    </div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="dataStartDate">Data Start Date</label>
-                            <input type="date" id="dataStartDate" name="dataStartDate">
-                        </div>
-                        <div class="form-group">
-                            <label for="dataEndDate">Data End Date</label>
-                            <input type="date" id="dataEndDate" name="dataEndDate">
-                        </div>
-                    </div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="samplingRate">Sampling Rate (seconds)</label>
-                            <input type="number" id="samplingRate" name="samplingRate" min="1" placeholder="e.g., 60">
-                        </div>
-                        <div class="form-group">
-                            <label for="dataPoints">Number of Data Points</label>
-                            <input type="number" id="dataPoints" name="dataPoints" min="1" placeholder="e.g., 10000">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Algorithm Configuration -->
-                <div class="form-section">
-                    <h3>Anomaly Detection Configuration</h3>
-                    <p class="section-description">Configure the anomaly detection algorithm parameters for this machine.</p>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="detectionAlgorithm">Detection Algorithm</label>
-                            <select id="detectionAlgorithm" name="detectionAlgorithm" required>
-                                <option value="">Select algorithm</option>
-                                <option value="autoencoder">Autoencoder (Deep Learning)</option>
-                                <option value="isolation_forest">Isolation Forest</option>
-                                <option value="one_class_svm">One-Class SVM</option>
-                                <option value="local_outlier_factor">Local Outlier Factor</option>
-                                <option value="elliptic_envelope">Elliptic Envelope</option>
-                                <option value="auto">Auto-select based on data</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="sensitivity">Detection Sensitivity</label>
-                            <select id="sensitivity" name="sensitivity" required>
-                                <option value="0.95">High (95% - Fewer false positives)</option>
-                                <option value="0.90" selected>Medium (90% - Balanced)</option>
-                                <option value="0.85">Low (85% - More sensitive)</option>
-                                <option value="0.80">Very Low (80% - Most sensitive)</option>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="trainingSplit">Training Data Split (%)</label>
-                            <input type="number" id="trainingSplit" name="trainingSplit" min="50" max="90" value="80" placeholder="80">
-                        </div>
-                        <div class="form-group">
-                            <label for="validationSplit">Validation Data Split (%)</label>
-                            <input type="number" id="validationSplit" name="validationSplit" min="10" max="30" value="20" placeholder="20">
-                        </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="enableRealTime" name="enableRealTime" checked>
-                            <span class="checkmark"></span>
-                            Enable real-time anomaly detection
-                        </label>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="enableRetraining" name="enableRetraining">
-                            <span class="checkmark"></span>
-                            Enable automatic model retraining
-                        </label>
                     </div>
                 </div>
 

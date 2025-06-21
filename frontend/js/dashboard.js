@@ -345,7 +345,7 @@ function validateForm(formData) {
     const requiredFields = [
         'machineName', 'machineType', 'manufacturer', 'model', 
         'serialNumber', 'assetTag', 'scadaSystem', 'location', 
-        'installationDate', 'criticality', 'detectionAlgorithm', 'sensitivity'
+        'installationDate', 'criticality'
     ];
     
     requiredFields.forEach(field => {
@@ -373,15 +373,6 @@ function validateForm(formData) {
         showFormError('trainingData', 'Training data file is required');
         isValid = false;
     } else if (!validateTrainingData(trainingData)) {
-        isValid = false;
-    }
-    
-    // Data split validation
-    const trainingSplit = parseInt(formData.get('trainingSplit'));
-    const validationSplit = parseInt(formData.get('validationSplit'));
-    
-    if (trainingSplit + validationSplit !== 100) {
-        showFormError('trainingSplit', 'Training and validation splits must equal 100%');
         isValid = false;
     }
     
@@ -516,19 +507,7 @@ async function handleAddMachine(e) {
             sensors: formData.getAll('sensors'),
             
             // Training Data Information
-            dataDescription: formData.get('dataDescription'),
-            dataStartDate: formData.get('dataStartDate'),
-            dataEndDate: formData.get('dataEndDate'),
-            samplingRate: formData.get('samplingRate') ? parseInt(formData.get('samplingRate')) : null,
-            dataPoints: formData.get('dataPoints') ? parseInt(formData.get('dataPoints')) : null,
-            
-            // Algorithm Configuration
-            detectionAlgorithm: formData.get('detectionAlgorithm'),
-            sensitivity: parseFloat(formData.get('sensitivity')),
-            trainingSplit: parseInt(formData.get('trainingSplit')),
-            validationSplit: parseInt(formData.get('validationSplit')),
-            enableRealTime: formData.get('enableRealTime') === 'on',
-            enableRetraining: formData.get('enableRetraining') === 'on'
+            dataDescription: formData.get('dataDescription')
         };
         
         // Add training data file
@@ -632,42 +611,55 @@ async function loadDashboardData() {
 }
 
 function displayDashboardData(data) {
-    // Update user greeting
-    const greetingElement = document.getElementById('userGreeting');
-    if (greetingElement && data.user) {
-        greetingElement.textContent = `Welcome back, ${data.user.name}!`;
+    // Update user name in greeting
+    const userNameElement = document.getElementById('userName');
+    if (userNameElement && data.user) {
+        userNameElement.textContent = data.user.name;
     }
     
-    // Update machine count
-    const machineCountElement = document.getElementById('machineCount');
-    if (machineCountElement && data.stats) {
-        machineCountElement.textContent = data.stats.totalMachines;
+    // Update overview cards
+    const totalMachinesElement = document.getElementById('totalMachines');
+    if (totalMachinesElement && data.stats) {
+        totalMachinesElement.textContent = data.stats.totalMachines;
     }
     
-    // Update health score
-    const healthScoreElement = document.getElementById('averageHealthScore');
-    if (healthScoreElement && data.stats) {
-        healthScoreElement.textContent = data.stats.averageHealthScore.toFixed(1);
+    const alertsCountElement = document.getElementById('alertsCount');
+    if (alertsCountElement && data.stats) {
+        alertsCountElement.textContent = data.stats.criticalMachines + data.stats.warningMachines;
+    }
+    
+    const healthyMachinesElement = document.getElementById('healthyMachines');
+    if (healthyMachinesElement && data.stats) {
+        healthyMachinesElement.textContent = data.stats.healthyMachines;
+    }
+    
+    const avgRULElement = document.getElementById('avgRUL');
+    if (avgRULElement && data.stats) {
+        avgRULElement.textContent = data.stats.averageHealthScore > 0 ? 
+            Math.round(data.stats.averageHealthScore) : 0;
     }
     
     // Display machines
     displayMachines(data.machines);
     
-    // Display alerts
+    // Display alerts in activity section
     displayAlerts(data.alerts);
 }
 
 function displayMachines(machines) {
-    const machinesContainer = document.getElementById('machinesContainer');
+    const machinesContainer = document.getElementById('machineList');
     if (!machinesContainer) return;
     
     if (machines.length === 0) {
         machinesContainer.innerHTML = `
-            <div class="empty-state">
+            <div class="no-machines">
                 <i class="fas fa-cogs"></i>
                 <h3>No machines added yet</h3>
                 <p>Add your first machine to start monitoring with anomaly detection</p>
-                <button class="btn btn-primary" id="addFirstMachineBtn">Add Machine</button>
+                <button class="btn btn-primary" id="addFirstMachineBtn">
+                    <i class="fas fa-plus"></i>
+                    Add Machine
+                </button>
             </div>
         `;
         
@@ -735,29 +727,32 @@ function displayMachines(machines) {
 }
 
 function displayAlerts(alerts) {
-    const alertsContainer = document.getElementById('alertsContainer');
+    const alertsContainer = document.getElementById('activityList');
     if (!alertsContainer) return;
     
     if (alerts.length === 0) {
         alertsContainer.innerHTML = `
-            <div class="empty-state">
-                <i class="fas fa-check-circle"></i>
-                <h3>No active alerts</h3>
-                <p>All machines are operating normally</p>
+            <div class="activity-item">
+                <div class="activity-icon">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <div class="activity-content">
+                    <p>No active alerts - All machines are operating normally</p>
+                    <span class="activity-time">Just now</span>
+                </div>
             </div>
         `;
         return;
     }
     
     alertsContainer.innerHTML = alerts.map(alert => `
-        <div class="alert-item ${alert.type}">
-            <div class="alert-icon">
+        <div class="activity-item">
+            <div class="activity-icon ${alert.type}">
                 <i class="fas fa-${alert.type === 'critical' ? 'exclamation-triangle' : 'exclamation-circle'}"></i>
             </div>
-            <div class="alert-content">
-                <h4>${alert.machineName}</h4>
-                <p>${alert.message}</p>
-                <span class="alert-time">${new Date(alert.timestamp).toLocaleString()}</span>
+            <div class="activity-content">
+                <p><strong>${alert.machineName}</strong>: ${alert.message}</p>
+                <span class="activity-time">${new Date(alert.timestamp).toLocaleString()}</span>
             </div>
         </div>
     `).join('');

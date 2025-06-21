@@ -1,6 +1,7 @@
 const express = require('express');
 const { auth } = require('../middleware/auth');
 const User = require('../models/User');
+const Machine = require('../models/Machine');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -49,12 +50,18 @@ const upload = multer({
 // @access  Private
 router.get('/overview', auth, async (req, res) => {
   try {
-    // Placeholder data - you'll implement actual dashboard logic here
+    // Get user's machines
+    const machines = await Machine.find({ userId: req.user._id });
+    
     const overviewData = {
-      totalMachines: 0,
-      criticalAlerts: 0,
-      maintenanceDue: 0,
-      healthyMachines: 0,
+      totalMachines: machines.length,
+      criticalAlerts: machines.filter(m => m.status === 'critical').length,
+      maintenanceDue: machines.filter(m => {
+        if (!m.lastMaintenance || !m.maintenanceInterval) return false;
+        const daysSinceMaintenance = (Date.now() - m.lastMaintenance.getTime()) / (1000 * 60 * 60 * 24);
+        return daysSinceMaintenance >= m.maintenanceInterval;
+      }).length,
+      healthyMachines: machines.filter(m => m.status === 'healthy').length,
       recentActivity: []
     };
 
@@ -72,12 +79,11 @@ router.get('/overview', auth, async (req, res) => {
 });
 
 // @route   GET /api/dashboard/machines
-// @desc    Get list of machines
+// @desc    Get list of machines for the current user
 // @access  Private
 router.get('/machines', auth, async (req, res) => {
   try {
-    // Placeholder data - you'll implement actual machine data here
-    const machines = [];
+    const machines = await Machine.find({ userId: req.user._id }).sort({ createdAt: -1 });
 
     res.json({
       success: true,
@@ -93,12 +99,24 @@ router.get('/machines', auth, async (req, res) => {
 });
 
 // @route   GET /api/dashboard/alerts
-// @desc    Get system alerts
+// @desc    Get system alerts for the current user
 // @access  Private
 router.get('/alerts', auth, async (req, res) => {
   try {
-    // Placeholder data - you'll implement actual alert system here
-    const alerts = [];
+    // Get machines with warnings or critical status
+    const alertMachines = await Machine.find({ 
+      userId: req.user._id,
+      status: { $in: ['warning', 'critical'] }
+    });
+
+    const alerts = alertMachines.map(machine => ({
+      id: machine._id,
+      machineId: machine._id,
+      machineName: machine.machineName,
+      type: machine.status,
+      message: `Machine ${machine.machineName} is in ${machine.status} status`,
+      timestamp: machine.lastUpdated
+    }));
 
     res.json({
       success: true,
@@ -116,57 +134,56 @@ router.get('/alerts', auth, async (req, res) => {
 // Get dashboard data
 router.get('/data', auth, async (req, res) => {
     try {
-        const user = await User.findById(req.user.id).select('-password');
+        const user = await User.findById(req.user._id).select('-password');
         
-        // Placeholder dashboard data - in a real app, this would come from a database
+        // Get user's machines
+        const machines = await Machine.find({ userId: req.user._id }).sort({ createdAt: -1 });
+        
+        // Get alerts
+        const alertMachines = await Machine.find({ 
+            userId: req.user._id,
+            status: { $in: ['warning', 'critical'] }
+        });
+
+        const alerts = alertMachines.map(machine => ({
+            id: machine._id,
+            machineId: machine._id,
+            machineName: machine.machineName,
+            type: machine.status,
+            message: `Machine ${machine.machineName} is in ${machine.status} status`,
+            timestamp: machine.lastUpdated
+        }));
+
+        // Calculate stats
+        const stats = {
+            totalMachines: machines.length,
+            healthyMachines: machines.filter(m => m.status === 'healthy').length,
+            warningMachines: machines.filter(m => m.status === 'warning').length,
+            criticalMachines: machines.filter(m => m.status === 'critical').length,
+            averageHealthScore: machines.length > 0 
+                ? machines.reduce((sum, m) => sum + m.healthScore, 0) / machines.length 
+                : 0
+        };
+        
         const dashboardData = {
             user: {
                 name: user.firstName + ' ' + user.lastName,
                 email: user.email
             },
-            machines: [
-                {
-                    id: 'machine_001',
-                    name: 'Pump Station A',
-                    type: 'pump',
-                    status: 'healthy',
-                    healthScore: 95,
-                    rulEstimate: 1825,
-                    lastUpdated: new Date().toISOString(),
-                    location: 'Building A, Floor 2, Line 3',
-                    criticality: 'critical',
-                    scadaSystem: 'Siemens WinCC'
-                },
-                {
-                    id: 'machine_002',
-                    name: 'Conveyor Line 3',
-                    type: 'conveyor',
-                    status: 'warning',
-                    healthScore: 78,
-                    rulEstimate: 365,
-                    lastUpdated: new Date().toISOString(),
-                    location: 'Building B, Floor 1, Line 1',
-                    criticality: 'important',
-                    scadaSystem: 'Rockwell FactoryTalk'
-                }
-            ],
-            alerts: [
-                {
-                    id: 'alert_001',
-                    machineId: 'machine_002',
-                    machineName: 'Conveyor Line 3',
-                    type: 'warning',
-                    message: 'Vibration levels approaching threshold',
-                    timestamp: new Date().toISOString()
-                }
-            ],
-            stats: {
-                totalMachines: 2,
-                healthyMachines: 1,
-                warningMachines: 1,
-                criticalMachines: 0,
-                averageHealthScore: 86.5
-            }
+            machines: machines.map(machine => ({
+                id: machine._id,
+                name: machine.machineName,
+                type: machine.machineType,
+                status: machine.status,
+                healthScore: machine.healthScore,
+                rulEstimate: machine.rulEstimate,
+                lastUpdated: machine.lastUpdated,
+                location: machine.location,
+                criticality: machine.criticality,
+                scadaSystem: machine.scadaSystem
+            })),
+            alerts: alerts,
+            stats: stats
         };
         
         res.json({ success: true, data: dashboardData });
@@ -186,7 +203,7 @@ router.post('/add-machine', auth, upload.single('trainingData'), async (req, res
         const requiredFields = [
             'machineName', 'machineType', 'manufacturer', 'model', 
             'serialNumber', 'assetTag', 'scadaSystem', 'location', 
-            'installationDate', 'criticality', 'detectionAlgorithm', 'sensitivity'
+            'installationDate', 'criticality'
         ];
         
         for (const field of requiredFields) {
@@ -214,39 +231,61 @@ router.post('/add-machine', auth, upload.single('trainingData'), async (req, res
             });
         }
         
-        // Validate data splits
-        if (machineData.trainingSplit + machineData.validationSplit !== 100) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Training and validation splits must equal 100%' 
-            });
-        }
-        
         console.log('Processing SCADA machine addition:', machineData.machineName);
         console.log('Training data file:', req.file.originalname);
         
-        // In a real application, you would:
-        // 1. Save machine data to database
-        // 2. Process the training data file
-        // 3. Train the anomaly detection model
-        // 4. Store the trained model
+        // Create new machine record
+        const newMachine = new Machine({
+            userId: req.user._id,
+            machineName: machineData.machineName,
+            machineType: machineData.machineType,
+            manufacturer: machineData.manufacturer,
+            model: machineData.model,
+            serialNumber: machineData.serialNumber,
+            assetTag: machineData.assetTag,
+            scadaSystem: machineData.scadaSystem,
+            scadaVersion: machineData.scadaVersion,
+            plcType: machineData.plcType,
+            communicationProtocol: machineData.communicationProtocol,
+            ipAddress: machineData.ipAddress,
+            port: machineData.port,
+            location: machineData.location,
+            department: machineData.department,
+            installationDate: machineData.installationDate,
+            lastMaintenance: machineData.lastMaintenance,
+            operatingHours: machineData.operatingHours,
+            maintenanceInterval: machineData.maintenanceInterval,
+            criticality: machineData.criticality,
+            operatingMode: machineData.operatingMode,
+            sensors: machineData.sensors,
+            dataDescription: machineData.dataDescription,
+            trainingDataFile: req.file.path,
+            modelStatus: 'training'
+        });
         
-        // For now, we'll simulate the process
-        const machineId = `machine_${Date.now()}`;
+        // Save machine to database
+        await newMachine.save();
         
         // Simulate training process
         const trainingResult = await simulateModelTraining(machineData, req.file);
+        
+        // Update machine with training results
+        newMachine.modelStatus = 'trained';
+        newMachine.trainingMetrics = trainingResult.metrics;
+        newMachine.lastTrained = new Date();
+        newMachine.nextRetraining = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days from now
+        await newMachine.save();
         
         res.json({
             success: true,
             message: 'Machine added successfully and anomaly detection model trained',
             data: {
-                machineId: machineId,
-                machineName: machineData.machineName,
+                machineId: newMachine._id,
+                machineName: newMachine.machineName,
                 trainingFile: req.file.originalname,
-                modelStatus: 'trained',
-                trainingMetrics: trainingResult.metrics,
-                nextRetraining: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // 30 days from now
+                modelStatus: newMachine.modelStatus,
+                trainingMetrics: newMachine.trainingMetrics,
+                nextRetraining: newMachine.nextRetraining
             }
         });
         
@@ -272,35 +311,47 @@ router.get('/machine/:machineId', auth, async (req, res) => {
     try {
         const { machineId } = req.params;
         
-        // In a real application, you would fetch this from a database
-        // For now, return placeholder data
+        // Find machine belonging to the current user
+        const machine = await Machine.findOne({ 
+            _id: machineId, 
+            userId: req.user._id 
+        });
+        
+        if (!machine) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Machine not found' 
+            });
+        }
+        
+        // Return machine data
         const machineData = {
-            id: machineId,
-            name: 'Pump Station A',
-            type: 'pump',
-            manufacturer: 'Siemens',
-            model: '1LE1001-1DB32',
-            serialNumber: 'SN2024-001234',
-            assetTag: 'ASSET-2024-001',
-            scadaSystem: 'Siemens WinCC',
-            scadaVersion: '2020 R2',
-            plcType: 'Siemens S7',
-            communicationProtocol: 'PROFINET',
-            ipAddress: '192.168.1.100',
-            port: 4840,
-            location: 'Building A, Floor 2, Line 3',
-            department: 'Production',
-            installationDate: '2023-01-15',
-            lastMaintenance: '2024-01-15',
-            operatingHours: 16,
-            maintenanceInterval: 180,
-            criticality: 'critical',
-            operatingMode: 'continuous',
-            status: 'healthy',
-            healthScore: 95,
-            rulEstimate: 1825,
-            sensors: ['temperature', 'vibration', 'current', 'speed'],
-            lastUpdated: new Date().toISOString(),
+            id: machine._id,
+            name: machine.machineName,
+            type: machine.machineType,
+            manufacturer: machine.manufacturer,
+            model: machine.model,
+            serialNumber: machine.serialNumber,
+            assetTag: machine.assetTag,
+            scadaSystem: machine.scadaSystem,
+            scadaVersion: machine.scadaVersion,
+            plcType: machine.plcType,
+            communicationProtocol: machine.communicationProtocol,
+            ipAddress: machine.ipAddress,
+            port: machine.port,
+            location: machine.location,
+            department: machine.department,
+            installationDate: machine.installationDate,
+            lastMaintenance: machine.lastMaintenance,
+            operatingHours: machine.operatingHours,
+            maintenanceInterval: machine.maintenanceInterval,
+            criticality: machine.criticality,
+            operatingMode: machine.operatingMode,
+            status: machine.status,
+            healthScore: machine.healthScore,
+            rulEstimate: machine.rulEstimate,
+            sensors: machine.sensors,
+            lastUpdated: machine.lastUpdated,
             sensorData: {
                 temperature: { value: 65.2, unit: '°C', status: 'normal' },
                 vibration: { value: 4.8, unit: 'mm/s', status: 'normal' },
@@ -308,11 +359,11 @@ router.get('/machine/:machineId', auth, async (req, res) => {
                 speed: { value: 1650, unit: 'RPM', status: 'normal' }
             },
             modelInfo: {
-                algorithm: 'Autoencoder',
+                algorithm: machine.trainingMetrics?.algorithm || 'Autoencoder',
                 sensitivity: 0.90,
-                lastTrained: '2024-01-15T10:00:00Z',
-                accuracy: 94.2,
-                nextRetraining: '2024-02-15T10:00:00Z'
+                lastTrained: machine.lastTrained,
+                accuracy: machine.trainingMetrics?.accuracy || 94.2,
+                nextRetraining: machine.nextRetraining
             }
         };
         
@@ -328,6 +379,19 @@ router.get('/machine/:machineId/sensor-data', auth, async (req, res) => {
     try {
         const { machineId } = req.params;
         const { hours = 24 } = req.query;
+        
+        // Verify machine belongs to the current user
+        const machine = await Machine.findOne({ 
+            _id: machineId, 
+            userId: req.user._id 
+        });
+        
+        if (!machine) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Machine not found' 
+            });
+        }
         
         // In a real application, you would fetch this from a time-series database
         // For now, return placeholder sensor data
@@ -352,9 +416,9 @@ async function simulateModelTraining(machineData, trainingFile) {
         recall: 75 + Math.random() * 25, // 75-100%
         f1Score: 80 + Math.random() * 20, // 80-100%
         trainingTime: 120 + Math.random() * 180, // 2-5 minutes
-        dataPoints: machineData.dataPoints || 10000,
+        dataPoints: 10000, // Default value
         features: machineData.sensors.length,
-        algorithm: machineData.detectionAlgorithm
+        algorithm: 'Autoencoder' // Default algorithm
     };
     
     return { metrics };
