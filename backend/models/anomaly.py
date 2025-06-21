@@ -160,39 +160,52 @@ def predict_anomalies_smoothed(user_id: str, machine_id: str, df: pd.DataFrame) 
     
     return pd.Series(normalized_scores, index=df.index)
 
-def predict_anomaly(user_id: str, machine_id: str, data_sequence: List[Dict[str, Any]]) -> Dict[str, Any]:
+def predict_anomaly(user_id: str, machine_id: str, data_values: List[float]) -> Dict[str, Any]:
     """
-    Predicts if a single sequence from a specific machine is an anomaly.
-    Suitable for a real-time API endpoint.
+    Predicts if a single reading (list of values) from a specific machine is an anomaly.
+    The order of values in data_values must match the order of columns from training.
     """
     paths = get_machine_model_paths(user_id, machine_id)
-    required_files = paths.values()
+    
+    # Check for model files
+    required_files = [paths['model_file'], paths['scaler_file'], paths['threshold_file'], paths['columns_file']]
     if not all(os.path.exists(f) for f in required_files):
-        return {"error": f"Model for machine {machine_id} is not fully trained or is missing files."}
+        missing = [os.path.basename(f) for f in required_files if not os.path.exists(f)]
+        return {"success": False, "error": f"Model for machine {machine_id} is not fully trained or is missing files: {', '.join(missing)}"}
 
-    model = load_model(paths['model_file'], custom_objects={'mae': tf.keras.losses.mae})
-    scaler = joblib.load(paths['scaler_file'])
-    with open(paths['threshold_file'], 'r') as f:
-        threshold = json.load(f)['threshold']
-    with open(paths['columns_file'], 'r') as f:
-        model_columns = json.load(f)
+    try:
+        model = load_model(paths['model_file'], custom_objects={'mae': tf.keras.losses.mae})
+        scaler = joblib.load(paths['scaler_file'])
+        with open(paths['threshold_file'], 'r') as f:
+            threshold = json.load(f)['threshold']
+        with open(paths['columns_file'], 'r') as f:
+            model_columns = json.load(f)
 
-    # The frontend sends a dictionary of sensor values, not a sequence.
-    # We will create a sequence of length SEQUENCE_LEN by repeating the single reading.
-    df_sequence = pd.DataFrame([data_sequence] * SEQUENCE_LEN)
-    df_sequence = df_sequence.reindex(columns=model_columns, fill_value=0)
-    
-    scaled_sequence = scaler.transform(df_sequence)
-    reshaped_sequence = np.array([scaled_sequence])
-    
-    pred_sequence = model.predict(reshaped_sequence)
-    mae_loss = np.mean(np.abs(pred_sequence - reshaped_sequence))
+        if len(data_values) != len(model_columns):
+            return {
+                "success": False, 
+                "error": f"Input data has {len(data_values)} features, but model expects {len(model_columns)}."
+            }
 
-    return {
-        "is_anomaly": bool(mae_loss > threshold),
-        "reconstruction_error": float(mae_loss),
-        "threshold": threshold
-    }
+        # Create a DataFrame for the single reading, repeated to match sequence length
+        df_sequence = pd.DataFrame([data_values] * SEQUENCE_LEN, columns=model_columns)
+        
+        scaled_sequence = scaler.transform(df_sequence)
+        reshaped_sequence = np.array([scaled_sequence])
+        
+        pred_sequence = model.predict(reshaped_sequence)
+        mae_loss = np.mean(np.abs(pred_sequence - reshaped_sequence))
+
+        return {
+            "success": True,
+            "data": {
+                "is_anomaly": bool(mae_loss > threshold),
+                "reconstruction_error": float(mae_loss),
+                "threshold": float(threshold)
+            }
+        }
+    except Exception as e:
+        return {"success": False, "error": f"Error during prediction: {str(e)}"}
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
@@ -227,7 +240,7 @@ if __name__ == "__main__":
             if "error" in prediction:
                  print(json.dumps({"success": False, "error": prediction["error"]}))
             else:
-                 print(json.dumps({"success": True, "data": prediction}))
+                 print(json.dumps(prediction))
 
         except Exception as e:
             print(json.dumps({"success": False, "error": f"Prediction failed: {str(e)}"}))

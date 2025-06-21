@@ -337,104 +337,118 @@ async function handleAddMachine(e) {
     const progressContainer = document.getElementById('uploadProgressContainer');
     const progressBar = document.getElementById('uploadProgressBar');
     const progressText = document.getElementById('uploadProgressText');
-    
+
     submitBtn.classList.add('loading');
     submitBtn.disabled = true;
     progressContainer.style.display = 'block';
+    progressBar.style.width = '0%';
+    progressText.textContent = '0%';
 
     try {
         const formData = new FormData(form);
         const machineData = {};
-        // Regular fields
-        for (const [key, value] of formData.entries()) {
-            if (key !== 'trainingData' && key !== 'sensorName' && key !== 'sensorUnit') {
-                machineData[key] = value;
-            }
-        }
+        const sensors = [];
 
-        // Sensor fields
-        machineData.sensors = [];
+        // Manually build machineData object and sensors array
         const sensorRows = document.querySelectorAll('#sensorConfigContainer .sensor-row');
         sensorRows.forEach((row, index) => {
             const name = row.querySelector('input[name="sensorName"]').value;
             const unit = row.querySelector('input[name="sensorUnit"]').value;
             if (name && unit) {
-                 machineData.sensors.push({
-                    sensorId: `sensor_${index + 1}`, // Corresponds to CSV column headers
+                sensors.push({
+                    sensorId: `sensor_${index + 1}`,
                     name: name,
                     type: name, // Using name as type for simplicity
                     unit: unit
                 });
             }
         });
-        
-        const trainingFile = formData.get('trainingData');
 
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', '/api/dashboard/add-machine', true);
-        xhr.setRequestHeader('Authorization', `Bearer ${localStorage.getItem('token')}`);
-
-        xhr.upload.onprogress = function(event) {
-            if (event.lengthComputable) {
-                const percentComplete = Math.round((event.loaded / event.total) * 100);
-                progressBar.style.width = percentComplete + '%';
-                progressText.textContent = percentComplete + '%';
+        // Get all other form data
+        for (const [key, value] of formData.entries()) {
+            if (key !== 'trainingData' && key !== 'sensorName' && key !== 'sensorUnit') {
+                machineData[key] = value;
             }
-        };
+        }
+        machineData.sensors = sensors;
 
-        xhr.onload = function() {
-            if (xhr.status >= 200 && xhr.status < 300) {
-                const result = JSON.parse(xhr.responseText);
-                if (result.success) {
-                    showMessage('Machine added successfully! Model training has started.', 'success');
-                    document.getElementById('addMachineModal').classList.remove('show');
-                    form.reset();
-                    setTimeout(loadDashboardData, 1000);
-                } else {
-                    showMessage(result.message || 'Failed to add machine.', 'error');
-                }
-            } else {
-                 try {
-                    const result = JSON.parse(xhr.responseText);
-                    showMessage(result.message || `An error occurred: ${xhr.statusText}`, 'error');
-                } catch (e) {
-                    showMessage(`An error occurred: ${xhr.statusText}`, 'error');
-                }
-            }
-            
-            // Reset and hide progress bar
-            progressContainer.style.display = 'none';
-            progressBar.style.width = '0%';
-            progressText.textContent = '0%';
-
-            // Re-enable button
-            submitBtn.classList.remove('loading');
-            submitBtn.disabled = false;
-        };
-
-        xhr.onerror = function() {
-            showMessage('A network error occurred. Please try again.', 'error');
-            progressContainer.style.display = 'none';
-            progressBar.style.width = '0%';
-            progressText.textContent = '0%';
-            submitBtn.classList.remove('loading');
-            submitBtn.disabled = false;
-        };
-        
+        // Create a new FormData for the request
         const payload = new FormData();
         payload.append('machineData', JSON.stringify(machineData));
+        const trainingFile = formData.get('trainingData');
         if (trainingFile) {
             payload.append('trainingData', trainingFile, trainingFile.name);
         }
-        xhr.send(payload);
 
+        const response = await fetchWithProgress('/api/dashboard/add-machine', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                // 'Content-Type' is not set, browser handles it for multipart/form-data
+            },
+            body: payload
+        }, progressBar, progressText);
+        
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+            showMessage('Machine added successfully! Model training has started.', 'success');
+            document.getElementById('addMachineModal').classList.remove('show');
+            form.reset();
+            // Clear dynamic sensor fields
+            document.getElementById('sensorConfigContainer').innerHTML = '';
+            addSensorInput(); // Add one back for the next time
+            setTimeout(loadDashboardData, 1000);
+        } else {
+            showMessage(result.message || 'Failed to add machine.', 'error');
+        }
     } catch (error) {
-        console.error('Error adding machine:', error);
-        showMessage('An error occurred. Please try again.', 'error');
+        console.error('Add machine error:', error);
+        showMessage(error.message || 'An unexpected error occurred.', 'error');
+    } finally {
         progressContainer.style.display = 'none';
         submitBtn.classList.remove('loading');
         submitBtn.disabled = false;
     }
+}
+
+/**
+ * A wrapper for the fetch API that provides upload progress.
+ * @param {string} url The URL to fetch.
+ * @param {object} opts The options to pass to the fetch request.
+ * @param {HTMLElement} progressBar The progress bar element.
+ * @param {HTMLElement} progressText The progress text element.
+ * @returns {Promise<Response>} A promise that resolves with the fetch Response.
+ */
+function fetchWithProgress(url, opts = {}, progressBar, progressText) {
+    return new Promise((res, rej) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open(opts.method || 'get', url);
+
+        for (const k in opts.headers || {}) {
+            xhr.setRequestHeader(k, opts.headers[k]);
+        }
+        
+        xhr.onload = e => res(new Response(e.target.response, {
+            status: e.target.status,
+            statusText: e.target.statusText,
+            headers: { 'Content-Type': e.target.getResponseHeader('Content-Type') }
+        }));
+        
+        xhr.onerror = rej;
+        
+        if (xhr.upload && progressBar) {
+            xhr.upload.onprogress = (e) => {
+                if (e.lengthComputable) {
+                    const percentComplete = Math.round((e.loaded / e.total) * 100);
+                    progressBar.style.width = percentComplete + '%';
+                    if(progressText) progressText.textContent = percentComplete + '%';
+                }
+            };
+        }
+        
+        xhr.send(opts.body);
+    });
 }
 
 function showMessage(message, type = 'info') {

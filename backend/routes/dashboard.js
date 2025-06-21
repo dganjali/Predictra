@@ -310,7 +310,7 @@ router.post('/add-machine', auth, upload.single('trainingData'), async (req, res
 // Function to call the Python training script
 function trainAnomalyDetectionModel(machineId, userId, dataPath) {
     const pythonScriptPath = path.join(__dirname, '..', 'models', 'anomaly.py');
-    const pythonProcess = spawn('python3', [pythonScriptPath, userId.toString(), machineId.toString(), dataPath]);
+    const pythonProcess = spawn('python3', [pythonScriptPath, 'train', userId.toString(), machineId.toString(), dataPath]);
 
     pythonProcess.stdout.on('data', async (data) => {
         const output = data.toString();
@@ -518,13 +518,44 @@ router.post('/machine/:id/predict', auth, async (req, res) => {
             return res.status(400).json({ success: false, message: 'Model for this machine is not trained yet.' });
         }
 
+        // --- Data Validation and Ordering ---
+        const modelDir = path.join(__dirname, '..', 'models', 'user_models', `user_${req.user._id.toString()}`, `machine_${machine._id.toString()}`);
+        const columnsFilePath = path.join(modelDir, 'model_columns.json');
+
+        if (!fs.existsSync(columnsFilePath)) {
+            return res.status(500).json({ success: false, message: 'Model configuration (model_columns.json) not found. Please retrain the model.' });
+        }
+
+        const expectedColumns = JSON.parse(fs.readFileSync(columnsFilePath, 'utf-8'));
+        
+        // The frontend may send sensor IDs like 'sensor_0', 'sensor_1', etc.
+        // The `machine.sensors` array maps these IDs to the actual column names from the CSV.
+        const mappedSensorData = {};
+        for (const sensor of machine.sensors) {
+            if (sensorData.hasOwnProperty(sensor.sensorId)) {
+                mappedSensorData[sensor.name] = sensorData[sensor.sensorId];
+            }
+        }
+        
+        const orderedSensorData = expectedColumns.map(column => mappedSensorData[column]);
+
+        if (orderedSensorData.some(v => v === undefined)) {
+            const missing = expectedColumns.filter(col => !mappedSensorData.hasOwnProperty(col));
+            return res.status(400).json({
+                success: false,
+                message: `Missing required sensor data. Please provide values for: ${missing.join(', ')}`
+            });
+        }
+        // --- End Validation ---
+
         // Create a temporary file for the prediction sequence
         const tempDir = path.join(__dirname, '..', 'uploads', 'temp');
         if (!fs.existsSync(tempDir)) {
             fs.mkdirSync(tempDir, { recursive: true });
         }
         const sequenceFilePath = path.join(tempDir, `predict_sequence_${machine._id}_${Date.now()}.json`);
-        fs.writeFileSync(sequenceFilePath, JSON.stringify(sensorData));
+        // Write the ordered array to the file, not the original object
+        fs.writeFileSync(sequenceFilePath, JSON.stringify(orderedSensorData));
 
         const pythonScriptPath = path.join(__dirname, '..', 'models', 'anomaly.py');
         const pythonProcess = spawn('python3', [
