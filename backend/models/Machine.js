@@ -126,7 +126,6 @@ const machineSchema = new mongoose.Schema({
   sensors: [{
     sensorId: String,
     name: String,
-    type: String,
     unit: String
   }],
   

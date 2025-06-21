@@ -201,14 +201,18 @@ router.get('/data', auth, async (req, res) => {
 // @access  Private
 router.post('/machines', auth, upload.single('csvFile'), async (req, res) => {
     try {
-        const machineData = req.body;
+        const { machineName, machineType, manufacturer, model, serialNumber, sensors, columns } = req.body;
         const user = req.user;
 
         const newMachine = new Machine({
-            ...machineData,
+            machineName,
+            machineType,
+            manufacturer,
+            model,
+            serialNumber,
             userId: user._id,
-            sensors: JSON.parse(machineData.sensors || '[]'),
-            training_columns: JSON.parse(machineData.columns || '[]'),
+            sensors: JSON.parse(sensors || '[]'),
+            training_columns: JSON.parse(columns || '[]'),
             modelStatus: 'untrained',
             statusDetails: 'Machine added. Ready for data connection.'
         });

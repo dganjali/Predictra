@@ -373,18 +373,18 @@ function initAddMachineModal() {
         const formData = new FormData(form);
         const token = localStorage.getItem('token');
         
-        // --- Assemble form data ---
         // 1. Get user-selected feature columns
         const featureColumns = [...document.querySelectorAll('input[name="columns"]:checked')].map(cb => cb.value);
 
         // 2. Find required ID and Timestamp columns from original headers
         const requiredColumns = originalCsvHeaders.filter(h => idTsSynonyms.includes(h.toLowerCase()));
 
-        // 3. Combine for the 'columns' field for the backend
+        // 3. Combine for the 'columns' field and clean up form data
         const allColumns = [...new Set([...featureColumns, ...requiredColumns])];
+        formData.delete('columns');
         formData.append('columns', JSON.stringify(allColumns));
         
-        // 4. Collect sensor configuration for feature columns only
+        // 4. Collect sensor configuration and clean up form data
         const sensors = [];
         featureColumns.forEach(column => {
             sensors.push({
@@ -392,6 +392,9 @@ function initAddMachineModal() {
                 name: formData.get(`sensor_display_${column}`),
                 unit: formData.get(`sensor_unit_${column}`)
             });
+            // Clean up the individual fields
+            formData.delete(`sensor_display_${column}`);
+            formData.delete(`sensor_unit_${column}`);
         });
         formData.append('sensors', JSON.stringify(sensors));
         
