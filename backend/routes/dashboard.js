@@ -629,6 +629,7 @@ router.delete('/machine/:id', auth, async (req, res) => {
         const { id } = req.params;
 
         const machine = await Machine.findById(id);
+
         if (!machine) {
             return res.status(404).json({ success: false, message: 'Machine not found' });
         }
@@ -637,12 +638,12 @@ router.delete('/machine/:id', auth, async (req, res) => {
         }
 
         // Remove the machine document from the database
-        await machine.remove();
+        await Machine.findByIdAndDelete(id);
 
         // Clean up associated files (model, scaler, etc.)
         const modelDir = path.join(__dirname, '..', 'models', 'user_models', `user_${req.user._id.toString()}`, `machine_${machine._id.toString()}`);
         if (fs.existsSync(modelDir)) {
-            fs.rmdirSync(modelDir, { recursive: true });
+            fs.rmSync(modelDir, { recursive: true, force: true });
             console.log(`Cleaned up model directory: ${modelDir}`);
         }
         

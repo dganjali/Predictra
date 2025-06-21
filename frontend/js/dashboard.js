@@ -506,7 +506,7 @@ function displayMachines(machines) {
     if (!machines || machines.length === 0) {
         machineList.innerHTML = ''; // Clear any existing cards
         if (noMachinesDiv) {
-            noMachinesDiv.style.display = 'flex'; // Show the "No machines" message
+            noMachinesDiv.style.display = 'flex';
             machineList.appendChild(noMachinesDiv);
         }
         return;
@@ -525,44 +525,42 @@ function displayMachines(machines) {
         return `
             <div class="machine-card" id="machine-${machine.id}">
                 <div class="card-header">
-                    <div class="machine-status-dot" style="background-color: ${statusColor};"></div>
-                    <h3 class="machine-name">${machine.name}</h3>
+                    <div class="machine-title">
+                        <i class="fas fa-cogs machine-icon"></i>
+                        <h3>${machine.name}</h3>
+                    </div>
                     <div class="machine-actions">
+                        <span class="status-badge" style="background-color: ${statusColor};">${machine.status}</span>
                         <div class="dropdown">
                             <button class="dropdown-toggle"><i class="fas fa-ellipsis-v"></i></button>
                             <div class="dropdown-menu">
-                                <button class="dropdown-item" data-action="view-details" data-id="${machine.id}">
-                                    <i class="fas fa-eye"></i> View Details
-                                </button>
-                                <button class="dropdown-item" data-action="calculate-risk" data-id="${machine.id}">
-                                    <i class="fas fa-calculator"></i> Calculate Risk
-                                </button>
+                                <button class="dropdown-item" data-action="view-details" data-id="${machine.id}"><i class="fas fa-eye"></i> View Details</button>
+                                <button class="dropdown-item" data-action="calculate-risk" data-id="${machine.id}"><i class="fas fa-calculator"></i> Calculate Risk</button>
                                 <div class="dropdown-divider"></div>
-                                <button class="dropdown-item danger" data-action="remove-machine" data-id="${machine.id}">
-                                    <i class="fas fa-trash-alt"></i> Remove Machine
-                                </button>
+                                <button class="dropdown-item danger" data-action="remove-machine" data-id="${machine.id}"><i class="fas fa-trash-alt"></i> Remove Machine</button>
                             </div>
                         </div>
                     </div>
                 </div>
                 <div class="card-body">
-                    <div class="machine-info">
-                        <p><strong>Type:</strong> ${machine.type}</p>
-                        <p><strong>Status:</strong> <span class="status-badge" style="background-color: ${statusColor};">${machine.status}</span></p>
-                    </div>
-                    <div class="machine-metrics">
-                        <div class="metric">
+                    <div class="metric">
+                        <i class="fas fa-shield-alt"></i>
+                        <div class="metric-info">
                             <span class="metric-value">${healthScore}</span>
                             <span class="metric-label">Health Score</span>
                         </div>
-                        <div class="metric">
+                    </div>
+                    <div class="metric">
+                        <i class="fas fa-calendar-alt"></i>
+                        <div class="metric-info">
                             <span class="metric-value">${rulEstimate}</span>
                             <span class="metric-label">RUL (days)</span>
                         </div>
                     </div>
                 </div>
                 <div class="card-footer">
-                    <p>Last Updated: ${lastUpdated}</p>
+                    <p><strong>Type:</strong> ${machine.type}</p>
+                    <p><strong>Last Updated:</strong> ${lastUpdated}</p>
                 </div>
             </div>
         `;
