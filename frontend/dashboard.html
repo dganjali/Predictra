@@ -180,7 +180,7 @@
                     <div class="form-row">
                         <div class="form-group">
                             <label for="manufacturer">Manufacturer</label>
-                            <input type="text" id="manufacturer" name="manufacturer" placeholder="e.g., Siemens, ABB, GE" required>
+                            <input type="text" id="manufacturer" name="manufacturer" placeholder="e.g., Siemens, ABB, GE">
                         </div>
                         <div class="form-group">
                             <label for="model">Model Number</label>
@@ -195,7 +195,7 @@
                         </div>
                         <div class="form-group">
                             <label for="assetTag">Asset Tag</label>
-                            <input type="text" id="assetTag" name="assetTag" placeholder="e.g., ASSET-2024-001" required>
+                            <input type="text" id="assetTag" name="assetTag" placeholder="e.g., ASSET-2024-001">
                         </div>
                     </div>
                 </div>
@@ -243,7 +243,7 @@
                         <div class="form-group">
                             <label for="communicationProtocol">Communication Protocol</label>
                             <select id="communicationProtocol" name="communicationProtocol">
-                                <option value="">Select protocol</option>
+                                <option value="">Select protocol (optional)</option>
                                 <option value="modbus_tcp">Modbus TCP</option>
                                 <option value="modbus_rtu">Modbus RTU</option>
                                 <option value="opc_ua">OPC UA</option>
@@ -265,66 +265,6 @@
                         <div class="form-group">
                             <label for="port">Port</label>
                             <input type="number" id="port" name="port" placeholder="e.g., 502, 4840">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Operational Information -->
-                <div class="form-section">
-                    <h3>Operational Parameters</h3>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="location">Physical Location</label>
-                            <input type="text" id="location" name="location" placeholder="e.g., Building A, Floor 2, Line 3" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="department">Department</label>
-                            <input type="text" id="department" name="department" placeholder="e.g., Production, Maintenance, Utilities">
-                        </div>
-                    </div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="installationDate">Installation Date</label>
-                            <input type="date" id="installationDate" name="installationDate" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="lastMaintenance">Last Maintenance Date</label>
-                            <input type="date" id="lastMaintenance" name="lastMaintenance">
-                        </div>
-                    </div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="operatingHours">Operating Hours/Day</label>
-                            <input type="number" id="operatingHours" name="operatingHours" min="0" max="24" placeholder="e.g., 16">
-                        </div>
-                        <div class="form-group">
-                            <label for="maintenanceInterval">Maintenance Interval (days)</label>
-                            <input type="number" id="maintenanceInterval" name="maintenanceInterval" min="1" placeholder="e.g., 180">
-                        </div>
-                    </div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="criticality">Criticality Level</label>
-                            <select id="criticality" name="criticality" required>
-                                <option value="">Select criticality</option>
-                                <option value="critical">Critical - Production stops if fails</option>
-                                <option value="important">Important - Production affected if fails</option>
-                                <option value="normal">Normal - Minimal production impact</option>
-                                <option value="low">Low - No production impact</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="operatingMode">Operating Mode</label>
-                            <select id="operatingMode" name="operatingMode">
-                                <option value="">Select mode</option>
-                                <option value="continuous">Continuous</option>
-                                <option value="intermittent">Intermittent</option>
-                                <option value="batch">Batch</option>
-                                <option value="standby">Standby</option>
-                            </select>
                         </div>
                     </div>
                 </div>

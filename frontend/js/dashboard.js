@@ -343,9 +343,8 @@ function validateForm(formData) {
     
     // Required fields validation
     const requiredFields = [
-        'machineName', 'machineType', 'manufacturer', 'model', 
-        'serialNumber', 'assetTag', 'scadaSystem', 'location', 
-        'installationDate', 'criticality'
+        'machineName', 'machineType', 'model', 
+        'serialNumber', 'scadaSystem'
     ];
     
     requiredFields.forEach(field => {
@@ -492,16 +491,6 @@ async function handleAddMachine(e) {
             communicationProtocol: formData.get('communicationProtocol'),
             ipAddress: formData.get('ipAddress'),
             port: formData.get('port') ? parseInt(formData.get('port')) : null,
-            
-            // Operational Parameters
-            location: formData.get('location'),
-            department: formData.get('department'),
-            installationDate: formData.get('installationDate'),
-            lastMaintenance: formData.get('lastMaintenance'),
-            operatingHours: formData.get('operatingHours') ? parseInt(formData.get('operatingHours')) : null,
-            maintenanceInterval: formData.get('maintenanceInterval') ? parseInt(formData.get('maintenanceInterval')) : null,
-            criticality: formData.get('criticality'),
-            operatingMode: formData.get('operatingMode'),
             
             // Sensor Configuration
             sensors: formData.getAll('sensors'),

@@ -201,9 +201,8 @@ router.post('/add-machine', auth, upload.single('trainingData'), async (req, res
         
         // Validate required fields
         const requiredFields = [
-            'machineName', 'machineType', 'manufacturer', 'model', 
-            'serialNumber', 'assetTag', 'scadaSystem', 'location', 
-            'installationDate', 'criticality'
+            'machineName', 'machineType', 'model', 
+            'serialNumber', 'scadaSystem'
         ];
         
         for (const field of requiredFields) {
@@ -237,26 +236,23 @@ router.post('/add-machine', auth, upload.single('trainingData'), async (req, res
         // Create new machine record
         const newMachine = new Machine({
             userId: req.user._id,
+            // Machine Identification
             machineName: machineData.machineName,
             machineType: machineData.machineType,
             manufacturer: machineData.manufacturer,
             model: machineData.model,
             serialNumber: machineData.serialNumber,
             assetTag: machineData.assetTag,
+            
+            // SCADA Configuration
             scadaSystem: machineData.scadaSystem,
             scadaVersion: machineData.scadaVersion,
             plcType: machineData.plcType,
             communicationProtocol: machineData.communicationProtocol,
             ipAddress: machineData.ipAddress,
             port: machineData.port,
-            location: machineData.location,
-            department: machineData.department,
-            installationDate: machineData.installationDate,
-            lastMaintenance: machineData.lastMaintenance,
-            operatingHours: machineData.operatingHours,
-            maintenanceInterval: machineData.maintenanceInterval,
-            criticality: machineData.criticality,
-            operatingMode: machineData.operatingMode,
+
+            // Sensor Configuration
             sensors: machineData.sensors,
             dataDescription: machineData.dataDescription,
             trainingDataFile: req.file.path,

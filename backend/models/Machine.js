@@ -26,7 +26,6 @@ const machineSchema = new mongoose.Schema({
   },
   manufacturer: {
     type: String,
-    required: [true, 'Manufacturer is required'],
     trim: true,
     maxlength: [100, 'Manufacturer name cannot exceed 100 characters']
   },
@@ -44,7 +43,6 @@ const machineSchema = new mongoose.Schema({
   },
   assetTag: {
     type: String,
-    required: [true, 'Asset tag is required'],
     trim: true,
     maxlength: [100, 'Asset tag cannot exceed 100 characters']
   },
@@ -91,7 +89,6 @@ const machineSchema = new mongoose.Schema({
   // Operational Parameters
   location: {
     type: String,
-    required: [true, 'Location is required'],
     trim: true,
     maxlength: [200, 'Location cannot exceed 200 characters']
   },
@@ -101,8 +98,7 @@ const machineSchema = new mongoose.Schema({
     maxlength: [100, 'Department cannot exceed 100 characters']
   },
   installationDate: {
-    type: Date,
-    required: [true, 'Installation date is required']
+    type: Date
   },
   lastMaintenance: {
     type: Date
@@ -118,8 +114,8 @@ const machineSchema = new mongoose.Schema({
   },
   criticality: {
     type: String,
-    required: [true, 'Criticality level is required'],
-    enum: ['critical', 'important', 'normal', 'low']
+    enum: ['critical', 'important', 'normal', 'low'],
+    default: 'normal'
   },
   operatingMode: {
     type: String,
