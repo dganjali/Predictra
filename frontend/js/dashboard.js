@@ -917,12 +917,18 @@ function openPredictionModal(machineId) {
         return;
     }
 
+    // Check if machine is trained
+    if (machine.modelStatus !== 'trained') {
+        showMessage('This machine model is not trained yet. Please train the model first.', 'error');
+        return;
+    }
+
     const modalTitle = document.getElementById('predictionModalTitle');
     const formBody = document.getElementById('predictionFormBody');
     const modal = document.getElementById('predictionModal');
     const resultContainer = document.getElementById('predictionResult');
 
-    modalTitle.textContent = `Calculate Risk for ${machine.name}`;
+    modalTitle.textContent = `Calculate Risk for ${machine.machineName}`;
     resultContainer.style.display = 'none';
 
     if (!machine.sensors || machine.sensors.length === 0) {
@@ -947,6 +953,7 @@ async function handlePrediction(e) {
     
     submitBtn.classList.add('loading');
     submitBtn.disabled = true;
+    submitBtn.textContent = 'Calculating...';
 
     try {
         const formData = new FormData(form);
@@ -967,10 +974,43 @@ async function handlePrediction(e) {
         const result = await response.json();
 
         if (result.success) {
+            // Update the result display
             document.getElementById('riskScore').textContent = result.data.reconstruction_error.toFixed(4);
             document.getElementById('isAnomaly').textContent = result.data.is_anomaly ? 'Yes' : 'No';
             document.getElementById('anomalyThreshold').textContent = `(Threshold: ${result.data.threshold.toFixed(4)})`;
+            
+            // Add additional information if available
+            if (result.data.healthScore !== undefined) {
+                const healthScoreElement = document.getElementById('healthScore');
+                if (healthScoreElement) {
+                    healthScoreElement.textContent = result.data.healthScore;
+                }
+            }
+            
+            if (result.data.status !== undefined) {
+                const statusElement = document.getElementById('riskStatus');
+                if (statusElement) {
+                    statusElement.textContent = result.data.status;
+                    statusElement.className = `risk-status ${result.data.status}`;
+                }
+            }
+            
             resultContainer.style.display = 'block';
+            
+            // Update the machine in the allMachines array and refresh the display
+            const machineIndex = allMachines.findIndex(m => m._id === currentPredictionMachineId);
+            if (machineIndex !== -1) {
+                allMachines[machineIndex].healthScore = result.data.healthScore || allMachines[machineIndex].healthScore;
+                allMachines[machineIndex].status = result.data.status || allMachines[machineIndex].status;
+                allMachines[machineIndex].lastUpdated = new Date().toISOString();
+                
+                // Refresh the dashboard to show updated values
+                setTimeout(() => {
+                    loadDashboardData();
+                }, 1000);
+            }
+            
+            showMessage('Risk calculation completed successfully!', 'success');
         } else {
             showMessage(result.message || 'Prediction failed.', 'error');
             resultContainer.style.display = 'none';
@@ -982,6 +1022,7 @@ async function handlePrediction(e) {
     } finally {
         submitBtn.classList.remove('loading');
         submitBtn.disabled = false;
+        submitBtn.textContent = 'Calculate Risk';
     }
 }
 

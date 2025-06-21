@@ -308,10 +308,30 @@
                 </div>
             </form>
             <div id="predictionResult" style="display:none;" class="prediction-result">
-                <h3>Prediction Result</h3>
-                <p><strong>Risk Score:</strong> <span id="riskScore"></span></p>
-                <p><strong>Is Anomaly:</strong> <span id="isAnomaly"></span></p>
-                <p id="anomalyThreshold"></p>
+                <h3>Risk Assessment Result</h3>
+                <div class="result-grid">
+                    <div class="result-item">
+                        <label>Risk Score:</label>
+                        <span id="riskScore" class="risk-score"></span>
+                    </div>
+                    <div class="result-item">
+                        <label>Anomaly Detected:</label>
+                        <span id="isAnomaly" class="anomaly-status"></span>
+                    </div>
+                    <div class="result-item">
+                        <label>Health Score:</label>
+                        <span id="healthScore" class="health-score"></span>
+                    </div>
+                    <div class="result-item">
+                        <label>Machine Status:</label>
+                        <span id="riskStatus" class="risk-status"></span>
+                    </div>
+                </div>
+                <p id="anomalyThreshold" class="threshold-info"></p>
+                <div class="result-note">
+                    <i class="fas fa-info-circle"></i>
+                    <span>The machine's health score and status have been updated based on this risk assessment.</span>
+                </div>
             </div>
         </div>
     </div>

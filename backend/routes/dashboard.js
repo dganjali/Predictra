@@ -428,23 +428,25 @@ router.post('/machine/:id/predict', auth, async (req, res) => {
 
         // --- Data Validation and Ordering ---
         const modelDir = path.join(__dirname, '..', 'models', 'user_models', `user_${req.user._id.toString()}`, `machine_${machine._id.toString()}`);
-        const columnsFilePath = path.join(modelDir, 'model_columns.json');
+        const columnsFilePath = path.join(modelDir, 'columns.json'); // Fixed: should be columns.json not model_columns.json
 
         if (!fs.existsSync(columnsFilePath)) {
-            return res.status(500).json({ success: false, message: 'Model configuration (model_columns.json) not found. Please retrain the model.' });
+            return res.status(500).json({ success: false, message: 'Model configuration (columns.json) not found. Please retrain the model.' });
         }
 
         const expectedColumns = JSON.parse(fs.readFileSync(columnsFilePath, 'utf-8'));
         
-        // The frontend may send sensor IDs like 'sensor_0', 'sensor_1', etc.
-        // The `machine.sensors` array maps these IDs to the actual column names from the CSV.
+        // Map sensor data to the expected column names
+        // The sensorData keys are the sensorIds from the frontend form
         const mappedSensorData = {};
         for (const sensor of machine.sensors) {
             if (sensorData.hasOwnProperty(sensor.sensorId)) {
-                mappedSensorData[sensor.name] = sensorData[sensor.sensorId];
+                // Use the sensor's sensorId (which is the column name from CSV) as the key
+                mappedSensorData[sensor.sensorId] = sensorData[sensor.sensorId];
             }
         }
         
+        // Order the data according to the trained model's expected column order
         const orderedSensorData = expectedColumns.map(column => mappedSensorData[column]);
 
         if (orderedSensorData.some(v => v === undefined)) {
@@ -496,7 +498,46 @@ router.post('/machine/:id/predict', auth, async (req, res) => {
             try {
                 const result = JSON.parse(rawOutput);
                 if (result.success) {
-                    res.json({ success: true, data: result.data });
+                    // Update the machine's health score based on the risk assessment
+                    const riskScore = result.data.reconstruction_error;
+                    const isAnomaly = result.data.is_anomaly;
+                    
+                    // Convert risk score to health score (inverse relationship)
+                    // Higher risk = lower health score
+                    let healthScore;
+                    if (isAnomaly) {
+                        // If anomaly detected, health score is between 0-40
+                        healthScore = Math.max(0, 40 - (riskScore * 100));
+                    } else {
+                        // If normal, health score is between 60-100
+                        healthScore = Math.min(100, 100 - (riskScore * 50));
+                    }
+                    
+                    // Update machine status based on health score
+                    let status = 'healthy';
+                    if (healthScore < 30) {
+                        status = 'critical';
+                    } else if (healthScore < 60) {
+                        status = 'warning';
+                    }
+                    
+                    // Update the machine in database
+                    await Machine.findByIdAndUpdate(machine._id, {
+                        healthScore: Math.round(healthScore),
+                        status: status,
+                        lastUpdated: new Date()
+                    });
+                    
+                    console.log(`Updated machine ${machine._id}: healthScore=${Math.round(healthScore)}, status=${status}`);
+                    
+                    res.json({ 
+                        success: true, 
+                        data: {
+                            ...result.data,
+                            healthScore: Math.round(healthScore),
+                            status: status
+                        }
+                    });
                 } else {
                     res.status(500).json({ success: false, message: result.error || 'Prediction failed.' });
                 }
@@ -683,11 +724,12 @@ async function trainModel(machine, user) {
     const userId = user._id.toString();
     const filePath = machine.training_data_path;
     let columns = machine.training_columns;
-    const TRAINING_ROW_LIMIT = 10000;
+    const TRAINING_ROW_LIMIT = 5000; // Reduced for faster training
 
     try {
         await Machine.findByIdAndUpdate(machineId, { 
             training_status: 'in_progress',
+            training_progress: 5,
             training_message: 'Preparing data for training...' 
         });
         
@@ -763,31 +805,58 @@ async function trainModel(machine, user) {
         });
 
         pythonProcess.on('close', async (code) => {
+            console.log(`[TRAIN-CLOSE ${machineId}]: Process exited with code ${code}`);
             try {
                 const paths = getModelPaths(userId, machineId);
-                const modelFilesExist = fs.existsSync(paths.model_file) && fs.existsSync(paths.threshold_file);
+                
+                // Check for both regular model file and alternative saves
+                const modelFileExists = fs.existsSync(paths.model_file);
+                const weightsFileExists = fs.existsSync(paths.model_file.replace('.h5', '_weights.h5'));
+                const thresholdFileExists = fs.existsSync(paths.threshold_file);
+                
                 const result = lastJsonOutput ? JSON.parse(lastJsonOutput) : null;
                 
-                if (code === 0 && result && result.success && modelFilesExist) {
+                if (code === 0 && result && result.success && (modelFileExists || weightsFileExists) && thresholdFileExists) {
+                    // Training successful - load and save parameters
                     const thresholdData = JSON.parse(fs.readFileSync(paths.threshold_file, 'utf8'));
+                    
+                    // Update machine with success status and model parameters
                     await Machine.findByIdAndUpdate(machineId, {
                         training_status: 'completed',
+                        training_progress: 100,
                         model_params: thresholdData,
-                        training_message: 'Training completed successfully.'
+                        modelStatus: 'trained',
+                        training_message: 'Training completed successfully.',
+                        lastTrained: new Date(),
+                        trainingDuration: Date.now() - Date.parse((await Machine.findById(machineId)).updatedAt)
                     });
+                    
+                    console.log(`✅ Training completed successfully for machine ${machineId}`);
+                    console.log(`📊 Model parameters saved: threshold=${thresholdData.threshold}`);
+                    
                 } else {
-                    let errorMsg = `Training failed with exit code ${code}.`;
+                    // Training failed - determine why
+                    let errorMsg = `Training failed with exit code ${code}`;
+                    
                     if (result && result.error) {
                         errorMsg = result.error;
+                    } else if (!thresholdFileExists) {
+                        errorMsg = "Training completed but threshold file was not created";
+                    } else if (!modelFileExists && !weightsFileExists) {
+                        errorMsg = "Training completed but model file was not created";
                     } else if (errorOutput) {
                         errorMsg = errorOutput.substring(0, 500);
                     }
+                    
                     throw new Error(errorMsg);
                 }
             } catch (e) {
+                console.error(`❌ Training failed for machine ${machineId}: ${e.message}`);
                 await Machine.findByIdAndUpdate(machineId, { 
                     training_status: 'failed',
-                    training_message: `Training failed: ${e.message.substring(0, 255)}`
+                    training_progress: 0,
+                    training_message: `Training failed: ${e.message.substring(0, 255)}`,
+                    modelStatus: 'untrained'
                 });
             }
         });

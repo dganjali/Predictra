@@ -2247,4 +2247,260 @@ a:hover {
 .btn-group {
     display: flex;
     gap: 10px;
-} 
+}
+
+/* Prediction Result Modal Styles */
+.prediction-result {
+    margin-top: 2rem;
+    padding: 1.5rem;
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+}
+
+.prediction-result h3 {
+    margin: 0 0 1.5rem 0;
+    color: var(--text-primary);
+    font-size: 1.25rem;
+    font-weight: 600;
+    text-align: center;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.result-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.result-item {
+    display: flex;
+    flex-direction: column;
+    padding: 1rem;
+    background: var(--bg-primary);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-light);
+    box-shadow: var(--shadow-sm);
+    transition: all 0.2s ease;
+}
+
+.result-item:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+}
+
+.result-item label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
+.result-item span {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* Risk Score Styling */
+.risk-score {
+    color: var(--info-color);
+    font-family: var(--font-mono);
+    background: rgba(59, 130, 246, 0.1);
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--radius-sm);
+}
+
+/* Anomaly Status Styling */
+.anomaly-status {
+    padding: 0.25rem 0.75rem;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.875rem;
+    letter-spacing: 0.025em;
+}
+
+.anomaly-status:contains("Yes") {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--danger-color);
+}
+
+.anomaly-status:contains("No") {
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--success-color);
+}
+
+/* Health Score Styling */
+.health-score {
+    font-weight: 700;
+    font-size: 1.25rem;
+}
+
+.health-score::after {
+    content: '%';
+    font-size: 0.875rem;
+    color: var(--text-tertiary);
+    margin-left: 0.125rem;
+}
+
+/* Machine Status Styling */
+.risk-status {
+    padding: 0.375rem 0.75rem;
+    border-radius: var(--radius-md);
+    font-weight: 600;
+    text-transform: capitalize;
+    font-size: 0.875rem;
+    text-align: center;
+    min-width: 80px;
+}
+
+.risk-status.healthy {
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--success-color);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.risk-status.warning {
+    background: rgba(245, 158, 11, 0.1);
+    color: var(--warning-color);
+    border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.risk-status.critical {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--danger-color);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+/* Threshold Info */
+.threshold-info {
+    margin: 1rem 0 0 0;
+    padding: 0.75rem;
+    background: rgba(59, 130, 246, 0.05);
+    border-left: 3px solid var(--info-color);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+/* Result Note */
+.result-note {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem;
+    background: rgba(16, 185, 129, 0.05);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    border-radius: var(--radius-md);
+    margin-top: 1rem;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.result-note i {
+    color: var(--success-color);
+    font-size: 1rem;
+}
+
+/* Enhanced status badges for risk assessment */
+.risk-status-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.risk-status-indicator.low {
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--success-color);
+}
+
+.risk-status-indicator.medium {
+    background: rgba(245, 158, 11, 0.1);
+    color: var(--warning-color);
+}
+
+.risk-status-indicator.high {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--danger-color);
+}
+
+.risk-status-indicator i {
+    font-size: 0.625rem;
+}
+
+/* Responsive adjustments for prediction result */
+@media (max-width: 768px) {
+    .result-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .prediction-result {
+        padding: 1rem;
+        margin-top: 1.5rem;
+    }
+    
+    .result-item {
+        padding: 0.75rem;
+    }
+    
+    .result-note {
+        flex-direction: column;
+        text-align: center;
+        gap: 0.5rem;
+    }
+}
+
+/* Animation for result appearance */
+.prediction-result {
+    animation: fadeInUp 0.4s ease-out;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Loading state for prediction button */
+.btn.loading {
+    position: relative;
+    color: transparent;
+}
+
+.btn.loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 16px;
+    height: 16px;
+    margin: -8px 0 0 -8px;
+    border: 2px solid transparent;
+    border-top: 2px solid currentColor;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}

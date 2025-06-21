@@ -157,7 +157,18 @@ const machineSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.Mixed
   },
   training_data_path: {
-      type: String
+    type: String
+  },
+  modelStatus: {
+    type: String,
+    enum: ['untrained', 'training', 'trained', 'failed'],
+    default: 'untrained'
+  },
+  lastTrained: {
+    type: Date
+  },
+  trainingDuration: {
+    type: Number  // Duration in milliseconds
   },
   
   // Current Status
