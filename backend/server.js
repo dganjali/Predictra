@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const path = require('path');
 require('dotenv').config();
 
 const authRoutes = require('./routes/auth');
@@ -34,33 +35,33 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Serve static files from frontend
-app.use(express.static('frontend'));
-
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 
 // Serve frontend pages
 app.get('/', (req, res) => {
-  res.sendFile(__dirname + '/../frontend/index.html');
+  res.sendFile(path.join(__dirname, '../frontend/index.html'));
 });
 
 app.get('/signin', (req, res) => {
-  res.sendFile(__dirname + '/../frontend/signin.html');
+  res.sendFile(path.join(__dirname, '../frontend/signin.html'));
 });
 
 app.get('/signup', (req, res) => {
-  res.sendFile(__dirname + '/../frontend/signup.html');
+  res.sendFile(path.join(__dirname, '../frontend/signup.html'));
 });
 
 app.get('/dashboard', (req, res) => {
-  res.sendFile(__dirname + '/../frontend/dashboard.html');
+  res.sendFile(path.join(__dirname, '../frontend/dashboard.html'));
 });
 
 app.get('/about', (req, res) => {
-  res.sendFile(__dirname + '/../frontend/about.html');
+  res.sendFile(path.join(__dirname, '../frontend/about.html'));
 });
+
+// Serve static files from frontend (CSS, JS, etc.)
+app.use(express.static(path.join(__dirname, '../frontend')));
 
 // Error handling middleware
 app.use((err, req, res, next) => {
