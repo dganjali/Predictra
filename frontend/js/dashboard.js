@@ -283,22 +283,23 @@ async function handleGoToStep2() {
     }
 
     navigateSteps(2);
-    const headersContainer = document.getElementById('csvHeadersContainer');
-    const spinner = headersContainer.querySelector('.spinner-container');
-    spinner.style.display = 'flex';
+    const progressContainer = document.getElementById('csvLoadProgressContainer');
+    const progressBar = document.getElementById('csvLoadProgressBar');
+    const progressText = document.getElementById('csvLoadProgressText');
+    progressContainer.style.display = 'block';
 
     try {
         const formData = new FormData();
         formData.append('trainingData', machineConfig.file);
 
-        const response = await fetch('/api/dashboard/get-csv-headers', {
+        const response = await fetchWithProgress('/api/dashboard/get-csv-headers', {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
             body: formData
-        });
+        }, progressBar, progressText);
 
         const result = await response.json();
-        spinner.style.display = 'none';
+        progressContainer.style.display = 'none';
 
         if (response.ok && result.success) {
             machineConfig.headers = result.headers;
@@ -308,7 +309,7 @@ async function handleGoToStep2() {
             navigateSteps(1); // Go back if error
         }
     } catch (error) {
-        spinner.style.display = 'none';
+        progressContainer.style.display = 'none';
         showMessage('An error occurred while reading the file.', 'error');
         navigateSteps(1);
     }

@@ -203,12 +203,15 @@
                     <div class="form-section">
                         <h3>Select Sensor Columns</h3>
                         <p class="form-hint">Select the columns from your CSV file that should be used to train the model.</p>
+                        <div class="form-progress" id="csvLoadProgressContainer" style="display: none;">
+                            <p>Analyzing CSV file, please wait...</p>
+                            <div class="progress-bar-container">
+                                <div class="progress-bar" id="csvLoadProgressBar" style="width: 0%;"></div>
+                            </div>
+                            <span id="csvLoadProgressText">0%</span>
+                        </div>
                         <div id="csvHeadersContainer" class="sensor-checkbox-grid">
                             <!-- Checkboxes will be dynamically populated here -->
-                            <div class="spinner-container" style="display: none;">
-                                <div class="spinner"></div>
-                                <p>Loading CSV columns...</p>
-                            </div>
                         </div>
                     </div>
                     <div class="form-actions">

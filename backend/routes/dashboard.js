@@ -675,14 +675,16 @@ router.post('/get-csv-headers', auth, upload.single('trainingData'), async (req,
 
     try {
         const fileContent = fs.readFileSync(filePath, 'utf8');
-        // Use a more robust method to get the first line
-        const firstLine = fileContent.split(/\r?\n/)[0];
-        const headers = firstLine.split(';'); // Assuming semicolon delimited based on training script
+        const firstLine = fileContent.split(/\\r?\\n/)[0];
+        let headers = firstLine.split(';');
+
+        // Filter out timestamp columns and any empty headers
+        headers = headers.filter(h => h && h.trim().toLowerCase() !== 'time_stamp' && h.trim().toLowerCase() !== 'timestamp');
         
         // Clean up the uploaded file immediately
         fs.unlinkSync(filePath);
 
-        res.json({ success: true, headers: headers.filter(h => h) }); // Filter out empty headers
+        res.json({ success: true, headers: headers });
 
     } catch (error) {
         console.error('Error reading CSV headers:', error);
