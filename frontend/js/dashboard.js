@@ -411,6 +411,26 @@ async function handleAddMachine(e) {
     const form = document.getElementById('addMachineForm');
     const submitBtn = form.querySelector('button[type="submit"]');
 
+    // --- Form Validation ---
+    const requiredFields = ['machineName', 'machineType', 'model', 'serialNumber', 'scadaSystem'];
+    let isValid = true;
+    
+    requiredFields.forEach(fieldId => {
+        const input = document.getElementById(fieldId);
+        if (!input.value) {
+            // Since some fields are in step 1, we need a generic message.
+            isValid = false;
+        }
+    });
+
+    if (!isValid) {
+        showMessage('Please ensure all required fields in Step 1 and Step 3 are filled out, including Model, Serial Number, and SCADA System.', 'error');
+        // Optionally, navigate back to the first step with errors.
+        navigateSteps(1); 
+        return;
+    }
+    // --- End Validation ---
+
     submitBtn.classList.add('loading');
     submitBtn.disabled = true;
 

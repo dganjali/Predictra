@@ -184,6 +184,28 @@
                                 </select>
                             </div>
                         </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="model">Model</label>
+                                <input type="text" id="model" name="model" placeholder="e.g., X-500" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="serialNumber">Serial Number</label>
+                                <input type="text" id="serialNumber" name="serialNumber" placeholder="e.g., SN-12345" required>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                             <div class="form-group">
+                                <label for="scadaSystem">SCADA System</label>
+                                <select id="scadaSystem" name="scadaSystem" required>
+                                    <option value="">Select SCADA system</option>
+                                    <option value="wonderware">Wonderware</option>
+                                    <option value="siemens">Siemens</option>
+                                    <option value="rockwell">Rockwell</option>
+                                    <option value="other">Other</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
                     <div class="form-section">
                         <h3>Data Source</h3>

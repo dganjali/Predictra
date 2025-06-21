@@ -47,9 +47,9 @@ def create_sequences(values, time_steps=SEQUENCE_LEN):
 def build_lstm_autoencoder(timesteps, n_features):
     """Builds the LSTM Autoencoder model."""
     model = Sequential()
-    model.add(LSTM(64, input_shape=(timesteps, n_features), activity_regularizer=l1(1e-5)))
+    model.add(LSTM(32, input_shape=(timesteps, n_features), activity_regularizer=l1(1e-5)))
     model.add(RepeatVector(timesteps))
-    model.add(LSTM(64, return_sequences=True))
+    model.add(LSTM(32, return_sequences=True))
     model.add(TimeDistributed(Dense(n_features)))
     model.compile(optimizer='adam', loss='mae')
     return model

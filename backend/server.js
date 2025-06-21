@@ -13,7 +13,14 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Security middleware
-app.use(helmet());
+app.use(
+  helmet.contentSecurityPolicy({
+    directives: {
+      ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+      "script-src": ["'self'", "https://cdnjs.cloudflare.com"],
+    },
+  })
+);
 
 // Rate limiting
 const limiter = rateLimit({
