@@ -213,6 +213,9 @@ router.get('/data', auth, async (req, res) => {
 
 // Add new machine with SCADA configuration and training data
 router.post('/add-machine', auth, upload.single('trainingData'), async (req, res) => {
+    // Set a long timeout for this specific route, e.g., 15 minutes
+    req.setTimeout(900000);
+
     try {
         const machineData = req.body;
         
@@ -296,95 +299,122 @@ router.post('/add-machine', auth, upload.single('trainingData'), async (req, res
             modelStatus: 'training'
         });
         
-        // Save machine to database
+        // Save the new machine to get its ID
         await newMachine.save();
-        
-        // Asynchronously start the model training process
-        const sensorNamesList = sensors.map(s => s.name);
-        trainAnomalyDetectionModel(newMachine._id, req.user._id, req.file.path, sensorNamesList);
 
-        res.status(201).json({ 
-            success: true, 
-            message: 'Machine added and model training started.', 
-            data: newMachine 
+        // Now, start the training process and wait for it to complete
+        await trainAnomalyDetectionModel(
+            newMachine._id,
+            req.user._id,
+            req.file.path,
+            sensors.map(s => s.name)
+        );
+
+        // Once training is successful, respond to the client
+        res.json({
+            success: true,
+            message: 'Machine added and model trained successfully!',
+            data: newMachine
         });
 
     } catch (error) {
         console.error('Add machine error:', error);
-        
-        // Clean up uploaded file if there's an error
-        if (req.file) {
-            fs.unlink(req.file.path, (err) => {
-                if (err) console.error("Error deleting training file after failed machine creation:", err);
-            });
+
+        // If a file was uploaded but an error occurred, clean it up.
+        // The training function also cleans up, but this is a fallback.
+        if (req.file && fs.existsSync(req.file.path)) {
+            fs.unlinkSync(req.file.path);
         }
         
-        res.status(500).json({ 
-            success: false, 
-            message: 'Failed to add machine. ' + error.message 
+        res.status(500).json({
+            success: false,
+            message: `Failed to add machine: ${error.message}`
         });
     }
 });
 
 // Function to call the Python training script
 function trainAnomalyDetectionModel(machineId, userId, dataPath, sensorNames) {
-    const pythonScriptPath = path.join(__dirname, '..', 'models', 'anomaly.py');
-    const sensorNamesArg = sensorNames.join(',');
-    const pythonProcess = spawn('python3', [pythonScriptPath, 'train', userId.toString(), machineId.toString(), dataPath, sensorNamesArg]);
+    return new Promise((resolve, reject) => {
+        const pythonScriptPath = path.join(__dirname, '..', 'models', 'anomaly.py');
+        const sensorNamesArg = sensorNames.join(',');
+        const pythonProcess = spawn('python3', [pythonScriptPath, 'train', userId.toString(), machineId.toString(), dataPath, sensorNamesArg]);
 
-    pythonProcess.stdout.on('data', async (data) => {
-        const output = data.toString();
-        console.log(`[Training Output for ${machineId}]: ${output}`);
-        try {
-            const result = JSON.parse(output);
-            if (result.success) {
-                await Machine.findByIdAndUpdate(machineId, { 
-                    modelStatus: 'trained',
-                    lastUpdated: Date.now(),
-                    operationalStatus: 'active'
-                });
-                console.log(`Model for machine ${machineId} trained successfully.`);
+        let lastOutput = '';
+        let lastError = '';
+
+        pythonProcess.stdout.on('data', (data) => {
+            const output = data.toString();
+            console.log(`[Training Output for ${machineId}]: ${output}`);
+            lastOutput += output;
+        });
+
+        pythonProcess.stderr.on('data', (data) => {
+            const errorMsg = data.toString();
+            console.error(`[Training Error for ${machineId}]: ${errorMsg}`);
+            lastError += errorMsg;
+        });
+
+        pythonProcess.on('close', async (code) => {
+            console.log(`Training process for machine ${machineId} exited with code ${code}`);
+            
+            // Clean up the uploaded file after training is complete
+            if (fs.existsSync(dataPath)) {
+                fs.unlinkSync(dataPath);
+                console.log(`Cleaned up training data file: ${dataPath}`);
+            }
+
+            if (code === 0) {
+                // Try to parse the final output from the script
+                try {
+                    const result = JSON.parse(lastOutput);
+                    if (result.success) {
+                        await Machine.findByIdAndUpdate(machineId, { 
+                            modelStatus: 'trained',
+                            lastUpdated: Date.now(),
+                            lastTrained: Date.now(),
+                            operationalStatus: 'active',
+                            trainingMetrics: result.metrics || {}
+                        });
+                        console.log(`Model for machine ${machineId} trained successfully.`);
+                        resolve({ success: true, message: 'Model trained successfully.', machineId });
+                    } else {
+                        throw new Error(result.error || 'Unknown training error.');
+                    }
+                } catch (e) {
+                     // This can happen if the last line of stdout is not the JSON object
+                    console.error(`Error parsing training result for ${machineId}. Raw output: ${lastOutput}`, e);
+                    const failureReason = `Training failed: could not parse final result. Check logs.`;
+                    await Machine.findByIdAndUpdate(machineId, { 
+                        modelStatus: 'failed',
+                        operationalStatus: 'error',
+                        statusDetails: failureReason
+                    });
+                    reject(new Error(failureReason));
+                }
             } else {
+                // The script exited with an error code
+                const failureReason = `Training process failed with exit code ${code}. Error: ${lastError}`;
                 await Machine.findByIdAndUpdate(machineId, { 
                     modelStatus: 'failed',
                     operationalStatus: 'error',
-                    statusDetails: `Training failed: ${result.error}`
+                    statusDetails: failureReason
                 });
-                console.error(`Training failed for machine ${machineId}: ${result.error}`);
+                console.error(failureReason);
+                reject(new Error(failureReason));
             }
-        } catch (e) {
-            // In case of non-JSON output, just log it
-             console.log(`[Training Log for ${machineId}]: ${output}`);
-        }
-    });
+        });
 
-    pythonProcess.stderr.on('data', async (data) => {
-        const errorMsg = data.toString();
-        console.error(`[Training Error for ${machineId}]: ${errorMsg}`);
-        try {
-             await Machine.findByIdAndUpdate(machineId, { 
-                modelStatus: 'failed',
-                operationalStatus: 'error',
-                statusDetails: `Training script error: ${errorMsg.substring(0, 200)}...` // Truncate long errors
-            });
-        } catch (dbError) {
-            console.error(`Failed to update machine status after training error for ${machineId}:`, dbError);
-        }
-    });
+        pythonProcess.on('error', (err) => {
+            console.error('Failed to start training process:', err);
+            
+            // Clean up the uploaded file on spawn error
+            if (fs.existsSync(dataPath)) {
+                fs.unlinkSync(dataPath);
+            }
 
-    pythonProcess.on('close', (code) => {
-        console.log(`Training process for machine ${machineId} exited with code ${code}`);
-        if (code !== 0) {
-            // Handle cases where the process exits with an error code but hasn't been marked as failed
-             Machine.findOne({_id: machineId}).then(machine => {
-                if (machine && machine.modelStatus !== 'trained') {
-                    machine.modelStatus = 'failed';
-                    machine.operationalStatus = 'error';
-                    machine.statusDetails = `Training process exited with non-zero code: ${code}. Check logs.`;
-                    return machine.save();
-                }
-            }).catch(err => console.error('Error updating machine on script exit error:', err));
-        }
+            reject(new Error('Failed to start training process.'));
+        });
     });
 }
 
