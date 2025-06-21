@@ -1,20 +1,27 @@
 // Authentication JavaScript file for sign in and sign up functionality
 
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM loaded, initializing auth...');
     // Initialize authentication functionality
     initAuth();
 });
 
 function initAuth() {
+    console.log('initAuth called');
     // Check if we're on a sign in or sign up page
     const signinForm = document.getElementById('signinForm');
     const signupForm = document.getElementById('signupForm');
     
+    console.log('signinForm found:', !!signinForm);
+    console.log('signupForm found:', !!signupForm);
+    
     if (signinForm) {
+        console.log('Initializing sign in form...');
         initSignIn(signinForm);
     }
     
     if (signupForm) {
+        console.log('Initializing sign up form...');
         initSignUp(signupForm);
     }
     
@@ -140,12 +147,16 @@ function initSignIn(form) {
 }
 
 function initSignUp(form) {
+    console.log('initSignUp called with form:', form);
     form.addEventListener('submit', async function(e) {
+        console.log('Form submit event triggered!');
         e.preventDefault();
         
         const submitBtn = form.querySelector('button[type="submit"]');
         const btnText = submitBtn.querySelector('.btn-text');
         const btnLoading = submitBtn.querySelector('.btn-loading');
+        
+        console.log('Submit button found:', !!submitBtn);
         
         // Clear previous errors
         clearErrors();
@@ -159,10 +170,15 @@ function initSignUp(form) {
         const confirmPassword = formData.get('confirmPassword');
         const termsAccepted = formData.get('termsAccepted') === 'on';
         
+        console.log('Form data:', { firstName, lastName, email, password: password ? '***' : 'empty', confirmPassword: confirmPassword ? '***' : 'empty', termsAccepted });
+        
         // Validate form
         if (!validateSignUpForm(firstName, lastName, email, password, confirmPassword, termsAccepted)) {
+            console.log('Form validation failed');
             return;
         }
+        
+        console.log('Form validation passed, sending request...');
         
         // Show loading state
         submitBtn.classList.add('loading');
@@ -182,7 +198,9 @@ function initSignUp(form) {
                 })
             });
             
+            console.log('Response received:', response.status);
             const data = await response.json();
+            console.log('Response data:', data);
             
             if (data.success) {
                 // Store token and user data
@@ -224,6 +242,8 @@ function initSignUp(form) {
             submitBtn.disabled = false;
         }
     });
+    
+    console.log('Signup form event listener attached');
 }
 
 function validateSignInForm(email, password) {
