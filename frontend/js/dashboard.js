@@ -420,11 +420,18 @@ async function handleAddMachine(e) {
 
     try {
         const formData = new FormData(form);
-        // We need to re-append the file as it's not part of the form state anymore
-        formData.append('trainingData', machineConfig.file, machineConfig.file.name);
-        
-        // Remove display names as they are not part of the Machine model
-        formData.delete('sensorDisplayName');
+
+        // Append the stored file object to the form data
+        if (machineConfig.file) {
+            formData.append('trainingData', machineConfig.file, machineConfig.file.name);
+        }
+
+        // Append selected sensors and their units/names
+        if (machineConfig.selectedSensors) {
+            machineConfig.selectedSensors.forEach(sensor => {
+                formData.append('selectedSensors', sensor);
+            });
+        }
 
         const response = await fetchWithProgress('/api/dashboard/add-machine', {
             method: 'POST',
