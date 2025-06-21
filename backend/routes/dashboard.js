@@ -302,18 +302,19 @@ router.post('/add-machine', auth, upload.single('trainingData'), async (req, res
         // Save the new machine to get its ID
         await newMachine.save();
 
-        // Now, start the training process and wait for it to complete
-        await trainAnomalyDetectionModel(
+        // Asynchronously start the model training process without waiting for it to finish.
+        // The Python script will update the DB on completion.
+        trainAnomalyDetectionModel(
             newMachine._id,
             req.user._id,
             req.file.path,
             sensors.map(s => s.name)
         );
 
-        // Once training is successful, respond to the client
-        res.json({
+        // Immediately respond to the client that the process has started.
+        res.status(201).json({
             success: true,
-            message: 'Machine added and model trained successfully!',
+            message: 'Machine added and model training has started.',
             data: newMachine
         });
 

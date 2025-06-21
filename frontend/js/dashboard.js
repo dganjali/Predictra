@@ -239,7 +239,7 @@ function initAddMachineModal() {
     const openModal = () => modal.classList.add('show');
     const closeModal = () => {
         modal.classList.remove('show');
-        resetModal();
+        resetAddMachineModal();
     };
 
     document.getElementById('addMachineBtn').addEventListener('click', openModal);
@@ -367,7 +367,7 @@ function displaySensorConfiguration(sensors) {
     `).join('');
 }
 
-function resetModal() {
+function resetAddMachineModal() {
     document.getElementById('addMachineForm').reset();
     machineConfig = { file: null, headers: [], selectedSensors: [] };
     document.getElementById('csvHeadersContainer').innerHTML = '<div class="spinner-container" style="display: none;"><div class="spinner"></div><p>Loading CSV columns...</p></div>';
@@ -410,13 +410,9 @@ async function handleAddMachine(e) {
     
     const form = document.getElementById('addMachineForm');
     const submitBtn = form.querySelector('button[type="submit"]');
-    const progressContainer = document.getElementById('uploadProgressContainer');
-    const progressBar = document.getElementById('uploadProgressBar');
-    const progressText = document.getElementById('uploadProgressText');
 
     submitBtn.classList.add('loading');
     submitBtn.disabled = true;
-    progressContainer.style.display = 'block';
 
     try {
         const formData = new FormData(form);
@@ -426,26 +422,22 @@ async function handleAddMachine(e) {
             formData.append('trainingData', machineConfig.file, machineConfig.file.name);
         }
 
-        // Append selected sensors and their units/names
-        if (machineConfig.selectedSensors) {
-            machineConfig.selectedSensors.forEach(sensor => {
-                formData.append('selectedSensors', sensor);
-            });
-        }
+        // The 'selectedSensors' are not needed here because their values
+        // ('sensorName', 'sensorUnit') are already in the form from step 3.
 
-        const response = await fetchWithProgress('/api/dashboard/add-machine', {
+        const response = await fetch('/api/dashboard/add-machine', {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
             body: formData
-        }, progressBar, progressText);
+        });
 
         const result = await response.json();
 
         if (response.ok && result.success) {
             showMessage('Machine added successfully! Model training has started.', 'success');
             document.getElementById('addMachineModal').classList.remove('show');
-            resetModal();
-            setTimeout(loadDashboardData, 1000);
+            resetAddMachineModal(); // Use the new, more comprehensive reset function
+            setTimeout(loadDashboardData, 500); // Refresh list to show 'training' status
         } else {
             showMessage(result.message || 'Failed to add machine.', 'error');
         }
@@ -453,7 +445,7 @@ async function handleAddMachine(e) {
         console.error('Add machine error:', error);
         showMessage(error.message || 'An unexpected error occurred.', 'error');
     } finally {
-        progressContainer.style.display = 'none';
+        // No more progress bar here, just re-enable the button
         submitBtn.classList.remove('loading');
         submitBtn.disabled = false;
     }
@@ -600,7 +592,17 @@ function displayMachines(machines) {
         const healthScore = machine.healthScore !== null && machine.healthScore !== undefined ? machine.healthScore.toFixed(1) : 'N/A';
         const rulEstimate = machine.rulEstimate !== null && machine.rulEstimate !== undefined ? machine.rulEstimate : 'N/A';
         const lastUpdated = machine.lastUpdated ? new Date(machine.lastUpdated).toLocaleString() : 'Never';
+        const modelStatus = machine.modelStatus || 'untrained';
 
+        let statusBadge;
+        if (modelStatus === 'training') {
+            statusBadge = `<span class="status-badge status-training"><i class="fas fa-sync-alt fa-spin"></i> Training...</span>`;
+        } else if (modelStatus === 'failed') {
+            statusBadge = `<span class="status-badge status-failed" title="${machine.statusDetails || 'Training failed'}"><i class="fas fa-exclamation-triangle"></i> Failed</span>`;
+        } else {
+            statusBadge = `<span class="status-badge" style="background-color: ${statusColor};">${machine.status}</span>`;
+        }
+        
         return `
             <div class="machine-card" id="machine-${machine.id}">
                 <div class="card-header">
@@ -609,12 +611,14 @@ function displayMachines(machines) {
                         <h3>${machine.name}</h3>
                     </div>
                     <div class="machine-actions">
-                        <span class="status-badge" style="background-color: ${statusColor};">${machine.status}</span>
+                        ${statusBadge}
                         <div class="dropdown">
-                            <button class="dropdown-toggle"><i class="fas fa-ellipsis-v"></i></button>
+                            <button class="dropdown-toggle" ${modelStatus === 'training' ? 'disabled' : ''}><i class="fas fa-ellipsis-v"></i></button>
                             <div class="dropdown-menu">
                                 <button class="dropdown-item" data-action="view-details" data-id="${machine.id}"><i class="fas fa-eye"></i> View Details</button>
-                                <button class="dropdown-item" data-action="calculate-risk" data-id="${machine.id}"><i class="fas fa-calculator"></i> Calculate Risk</button>
+                                <button class="dropdown-item" data-action="calculate-risk" data-id="${machine.id}" ${modelStatus !== 'trained' ? 'disabled' : ''}>
+                                    <i class="fas fa-calculator"></i> Calculate Risk
+                                </button>
                                 <div class="dropdown-divider"></div>
                                 <button class="dropdown-item danger" data-action="remove-machine" data-id="${machine.id}"><i class="fas fa-trash-alt"></i> Remove Machine</button>
                             </div>
@@ -869,7 +873,9 @@ function getStatusColor(status) {
         'warning': '#f59e0b',
         'critical': '#ef4444',
         'maintenance': '#3b82f6',
-        'offline': '#6b7280'
+        'offline': '#6b7280',
+        'training': '#3b82f6', // blue
+        'failed': '#9ca3af'   // gray
     };
     return colors[status] || '#6b7280';
 }
