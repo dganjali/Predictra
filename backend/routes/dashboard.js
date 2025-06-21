@@ -213,9 +213,28 @@ router.get('/data', auth, async (req, res) => {
 // Add new machine with SCADA configuration and training data
 router.post('/add-machine', auth, upload.single('trainingData'), async (req, res) => {
     try {
-        // Parse machine data from JSON string
-        const machineData = JSON.parse(req.body.machineData);
+        const machineData = req.body;
         
+        // --- Assemble Sensors Array ---
+        const sensors = [];
+        // When form fields have the same name, multer creates an array.
+        const sensorNames = Array.isArray(machineData.sensorName) ? machineData.sensorName : [machineData.sensorName];
+        const sensorUnits = Array.isArray(machineData.sensorUnit) ? machineData.sensorUnit : [machineData.sensorUnit];
+
+        if (sensorNames && sensorUnits && sensorNames.length === sensorUnits.length) {
+            for (let i = 0; i < sensorNames.length; i++) {
+                if (sensorNames[i]) { // Ensure sensor name is not empty
+                    sensors.push({
+                        sensorId: `sensor_${i + 1}`,
+                        name: sensorNames[i],
+                        type: sensorNames[i], // Using name as type for simplicity
+                        unit: sensorUnits[i]
+                    });
+                }
+            }
+        }
+        // --- End Assembly ---
+
         // Validate required fields
         const requiredFields = [
             'machineName', 'machineType', 'model', 
@@ -231,15 +250,13 @@ router.post('/add-machine', auth, upload.single('trainingData'), async (req, res
             }
         }
         
-        /*
-        // Validate sensors - REMOVED PER USER REQUEST
-        if (!machineData.sensors || machineData.sensors.length === 0) {
+        // Validate sensors
+        if (sensors.length === 0) {
             return res.status(400).json({ 
                 success: false, 
-                message: 'At least one sensor must be selected' 
+                message: 'At least one valid sensor must be provided.' 
             });
         }
-        */
         
         // Validate training data file
         if (!req.file) {
@@ -272,7 +289,7 @@ router.post('/add-machine', auth, upload.single('trainingData'), async (req, res
             port: machineData.port,
 
             // Sensor Configuration
-            sensors: machineData.sensors,
+            sensors: sensors, // Use the assembled sensors array
             dataDescription: machineData.dataDescription,
             trainingDataPath: req.file.path,
             modelStatus: 'training'
@@ -601,6 +618,45 @@ router.post('/machine/:id/predict', auth, async (req, res) => {
     } catch (error) {
         console.error('Prediction route error:', error);
         res.status(500).json({ success: false, message: 'Server error during prediction' });
+    }
+});
+
+// @route   DELETE /api/dashboard/machine/:id
+// @desc    Remove a machine and its associated model
+// @access  Private
+router.delete('/machine/:id', auth, async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const machine = await Machine.findById(id);
+        if (!machine) {
+            return res.status(404).json({ success: false, message: 'Machine not found' });
+        }
+        if (machine.userId.toString() !== req.user._id.toString()) {
+            return res.status(403).json({ success: false, message: 'User not authorized' });
+        }
+
+        // Remove the machine document from the database
+        await machine.remove();
+
+        // Clean up associated files (model, scaler, etc.)
+        const modelDir = path.join(__dirname, '..', 'models', 'user_models', `user_${req.user._id.toString()}`, `machine_${machine._id.toString()}`);
+        if (fs.existsSync(modelDir)) {
+            fs.rmdirSync(modelDir, { recursive: true });
+            console.log(`Cleaned up model directory: ${modelDir}`);
+        }
+        
+        // Clean up training data if it exists
+        if (machine.trainingDataPath && fs.existsSync(machine.trainingDataPath)) {
+            fs.unlinkSync(machine.trainingDataPath);
+            console.log(`Cleaned up training file: ${machine.trainingDataPath}`);
+        }
+
+        res.json({ success: true, message: 'Machine and associated model removed successfully.' });
+
+    } catch (error) {
+        console.error('Remove machine error:', error);
+        res.status(500).json({ success: false, message: 'Server error during machine removal' });
     }
 });
 

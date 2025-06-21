@@ -98,6 +98,9 @@ function initDashboard() {
     // Initialize machine management
     initMachineManagement();
     
+    // Initialize confirmation modal
+    initConfirmationModal();
+    
     // Load dashboard data (placeholder for future implementation)
     loadDashboardData();
 }
@@ -189,6 +192,8 @@ function initMachineManagement() {
                 viewMachineDetails(id);
             } else if (action === 'calculate-risk') {
                 openPredictionModal(id);
+            } else if (action === 'remove-machine') {
+                handleRemoveMachine(id);
             }
         });
     }
@@ -345,46 +350,13 @@ async function handleAddMachine(e) {
     progressText.textContent = '0%';
 
     try {
-        const formData = new FormData(form);
-        const machineData = {};
-        const sensors = [];
-
-        // Manually build machineData object and sensors array
-        const sensorRows = document.querySelectorAll('#sensorConfigContainer .sensor-row');
-        sensorRows.forEach((row, index) => {
-            const name = row.querySelector('input[name="sensorName"]').value;
-            const unit = row.querySelector('input[name="sensorUnit"]').value;
-            if (name && unit) {
-                sensors.push({
-                    sensorId: `sensor_${index + 1}`,
-                    name: name,
-                    type: name, // Using name as type for simplicity
-                    unit: unit
-                });
-            }
-        });
-
-        // Get all other form data
-        for (const [key, value] of formData.entries()) {
-            if (key !== 'trainingData' && key !== 'sensorName' && key !== 'sensorUnit') {
-                machineData[key] = value;
-            }
-        }
-        machineData.sensors = sensors;
-
-        // Create a new FormData for the request
-        const payload = new FormData();
-        payload.append('machineData', JSON.stringify(machineData));
-        const trainingFile = formData.get('trainingData');
-        if (trainingFile) {
-            payload.append('trainingData', trainingFile, trainingFile.name);
-        }
+        // Use the raw form data directly
+        const payload = new FormData(form);
 
         const response = await fetchWithProgress('/api/dashboard/add-machine', {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${localStorage.getItem('token')}`
-                // 'Content-Type' is not set, browser handles it for multipart/form-data
             },
             body: payload
         }, progressBar, progressText);
@@ -528,80 +500,103 @@ function displayDashboardData(data) {
 }
 
 function displayMachines(machines) {
-    const machinesContainer = document.getElementById('machineList');
-    if (!machinesContainer) return;
-    
-    if (machines.length === 0) {
-        machinesContainer.innerHTML = `
-            <div class="no-machines">
-                <i class="fas fa-cogs"></i>
-                <h3>No machines added yet</h3>
-                <p>Add your first machine to start monitoring with anomaly detection</p>
-                <button class="btn btn-primary" id="addFirstMachineBtn">
-                    <i class="fas fa-plus"></i>
-                    Add Machine
-                </button>
-            </div>
-        `;
-        
-        // Re-initialize the add machine button
-        const addFirstMachineBtn = document.getElementById('addFirstMachineBtn');
-        if (addFirstMachineBtn) {
-            addFirstMachineBtn.addEventListener('click', () => {
-                document.getElementById('addMachineModal').classList.add('show');
-            });
+    const machineList = document.getElementById('machineList');
+    const noMachinesDiv = document.querySelector('.no-machines');
+
+    if (!machines || machines.length === 0) {
+        machineList.innerHTML = ''; // Clear any existing cards
+        if (noMachinesDiv) {
+            noMachinesDiv.style.display = 'flex'; // Show the "No machines" message
+            machineList.appendChild(noMachinesDiv);
         }
         return;
     }
+
+    if (noMachinesDiv) {
+        noMachinesDiv.style.display = 'none';
+    }
     
-    machinesContainer.innerHTML = machines.map(machine => `
-        <div class="machine-card ${machine.status || 'healthy'}">
-            <div class="machine-header">
-                <h3>${machine.name}</h3>
-                <div class="machine-badges">
-                    <span class="status-badge ${getStatusColor(machine.status || 'N/A')}">${machine.status || 'N/A'}</span>
+    machineList.innerHTML = machines.map(machine => {
+        const statusColor = getStatusColor(machine.status);
+        const healthScore = machine.healthScore !== null && machine.healthScore !== undefined ? machine.healthScore.toFixed(1) : 'N/A';
+        const rulEstimate = machine.rulEstimate !== null && machine.rulEstimate !== undefined ? machine.rulEstimate : 'N/A';
+        const lastUpdated = machine.lastUpdated ? new Date(machine.lastUpdated).toLocaleString() : 'Never';
+
+        return `
+            <div class="machine-card" id="machine-${machine.id}">
+                <div class="card-header">
+                    <div class="machine-status-dot" style="background-color: ${statusColor};"></div>
+                    <h3 class="machine-name">${machine.name}</h3>
+                    <div class="machine-actions">
+                        <div class="dropdown">
+                            <button class="dropdown-toggle"><i class="fas fa-ellipsis-v"></i></button>
+                            <div class="dropdown-menu">
+                                <button class="dropdown-item" data-action="view-details" data-id="${machine.id}">
+                                    <i class="fas fa-eye"></i> View Details
+                                </button>
+                                <button class="dropdown-item" data-action="calculate-risk" data-id="${machine.id}">
+                                    <i class="fas fa-calculator"></i> Calculate Risk
+                                </button>
+                                <div class="dropdown-divider"></div>
+                                <button class="dropdown-item danger" data-action="remove-machine" data-id="${machine.id}">
+                                    <i class="fas fa-trash-alt"></i> Remove Machine
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="machine-info">
+                        <p><strong>Type:</strong> ${machine.type}</p>
+                        <p><strong>Status:</strong> <span class="status-badge" style="background-color: ${statusColor};">${machine.status}</span></p>
+                    </div>
+                    <div class="machine-metrics">
+                        <div class="metric">
+                            <span class="metric-value">${healthScore}</span>
+                            <span class="metric-label">Health Score</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-value">${rulEstimate}</span>
+                            <span class="metric-label">RUL (days)</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <p>Last Updated: ${lastUpdated}</p>
                 </div>
             </div>
-            <div class="machine-details">
-                <div class="detail-row">
-                    <div class="detail-item">
-                        <span class="label">Type:</span>
-                        <span class="value">${machine.type ? machine.type.replace('_', ' ') : 'N/A'}</span>
-                    </div>
-                    <div class="detail-item">
-                        <span class="label">Model Status:</span>
-                        <span class="value">${machine.modelStatus || 'N/A'}</span>
-                    </div>
-                </div>
-                <div class="detail-row">
-                     <div class="detail-item">
-                        <span class="label">Health Score:</span>
-                        <span class="value health-score">${machine.healthScore !== undefined ? machine.healthScore + '%' : 'N/A'}</span>
-                    </div>
-                    <div class="detail-item">
-                        <span class="label">Last Updated:</span>
-                        <span class="value">${new Date(machine.lastUpdated).toLocaleString()}</span>
-                    </div>
-                </div>
-            </div>
-            <div class="machine-actions">
-                <button class="btn btn-secondary btn-sm" data-action="view-details" data-id="${machine._id}">
-                    <i class="fas fa-eye"></i> View Details
-                </button>
-                <button class="btn btn-primary btn-sm" data-action="calculate-risk" data-id="${machine._id}">
-                    <i class="fas fa-calculator"></i> Calculate Risk
-                </button>
-            </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
+
+    // Add event listeners for new dropdowns
+    document.querySelectorAll('.machine-card .dropdown-toggle').forEach(toggle => {
+        toggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const dropdown = toggle.parentElement;
+            // Close other dropdowns
+            document.querySelectorAll('.dropdown.show').forEach(d => {
+                if (d !== dropdown) d.classList.remove('show');
+            });
+            dropdown.classList.toggle('show');
+        });
+    });
 }
 
+// Close dropdowns when clicking outside
+window.addEventListener('click', (e) => {
+    if (!e.target.closest('.dropdown')) {
+        document.querySelectorAll('.dropdown.show').forEach(d => {
+            d.classList.remove('show');
+        });
+    }
+});
+
 function displayAlerts(alerts) {
-    const alertsContainer = document.getElementById('activityList');
-    if (!alertsContainer) return;
+    const activityList = document.getElementById('activityList');
+    if (!activityList) return;
     
     if (alerts.length === 0) {
-        alertsContainer.innerHTML = `
+        activityList.innerHTML = `
             <div class="activity-item">
                 <div class="activity-icon">
                     <i class="fas fa-check-circle"></i>
@@ -615,7 +610,7 @@ function displayAlerts(alerts) {
         return;
     }
     
-    alertsContainer.innerHTML = alerts.map(alert => `
+    activityList.innerHTML = alerts.map(alert => `
         <div class="activity-item">
             <div class="activity-icon ${alert.type}">
                 <i class="fas fa-${alert.type === 'critical' ? 'exclamation-triangle' : 'exclamation-circle'}"></i>
@@ -700,7 +695,7 @@ function viewAnomalyData(machineId) {
 
 function openPredictionModal(machineId) {
     currentPredictionMachineId = machineId;
-    const machine = allMachines.find(m => m._id === machineId);
+    const machine = allMachines.find(m => m.id === machineId);
     if (!machine) {
         showMessage('Could not find machine details.', 'error');
         return;
@@ -800,6 +795,83 @@ function getStatusColor(status) {
         'offline': '#6b7280'
     };
     return colors[status] || '#6b7280';
+}
+
+function initConfirmationModal() {
+    const modal = document.getElementById('confirmationModal');
+    const closeBtn = document.getElementById('closeConfirmationModal');
+    const cancelBtn = document.getElementById('cancelConfirmation');
+
+    if (modal) {
+        const closeModal = () => modal.classList.remove('show');
+        closeBtn.addEventListener('click', closeModal);
+        cancelBtn.addEventListener('click', closeModal);
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeModal();
+            }
+        });
+    }
+}
+
+function handleRemoveMachine(machineId) {
+    const modal = document.getElementById('confirmationModal');
+    const title = document.getElementById('confirmationModalTitle');
+    const text = document.getElementById('confirmationModalText');
+    const confirmBtn = document.getElementById('confirmAction');
+
+    const machine = allMachines.find(m => m.id === machineId);
+    if (!machine) {
+        showMessage('Could not find machine details to remove.', 'error');
+        return;
+    }
+
+    title.textContent = `Remove ${machine.name}?`;
+    text.innerHTML = `
+        <p>Are you sure you want to permanently remove this machine and its associated model?</p>
+        <p><strong>This action cannot be undone.</strong></p>
+    `;
+
+    modal.classList.add('show');
+
+    // Clone and replace the button to remove old event listeners
+    const newConfirmBtn = confirmBtn.cloneNode(true);
+    confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+
+    newConfirmBtn.addEventListener('click', async () => {
+        try {
+            newConfirmBtn.classList.add('loading');
+            newConfirmBtn.disabled = true;
+
+            const response = await fetch(`/api/dashboard/machine/${machineId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
+
+            const result = await response.json();
+
+            if (response.ok && result.success) {
+                showMessage(`Machine '${machine.name}' has been removed.`, 'success');
+                // Remove machine from the list visually
+                const machineCard = document.getElementById(`machine-${machineId}`);
+                if (machineCard) {
+                    machineCard.remove();
+                }
+                // Update the global list
+                allMachines = allMachines.filter(m => m.id !== machineId);
+                // Refresh data to update stats
+                loadDashboardData();
+            } else {
+                showMessage(result.message || 'Failed to remove machine.', 'error');
+            }
+        } catch (error) {
+            showMessage('An error occurred while removing the machine.', 'error');
+        } finally {
+            newConfirmBtn.classList.remove('loading');
+            newConfirmBtn.disabled = false;
+            modal.classList.remove('show');
+        }
+    });
 }
 
 // Export functions for use in other modules
