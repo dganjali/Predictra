@@ -256,12 +256,7 @@ async function handleAddMachine(e) {
             }
         }
         
-        const originalFile = formData.get('trainingData');
-        let trainingFile = originalFile;
-        if (originalFile && originalFile.size > 5 * 1024 * 1024) {
-            trainingFile = originalFile.slice(0, 5 * 1024 * 1024);
-            showMessage('File is larger than 5MB. Uploading only the first 5MB.', 'info');
-        }
+        const trainingFile = formData.get('trainingData');
 
         const xhr = new XMLHttpRequest();
         xhr.open('POST', '/api/dashboard/add-machine', true);
@@ -317,7 +312,7 @@ async function handleAddMachine(e) {
         const payload = new FormData();
         payload.append('machineData', JSON.stringify(machineData));
         if (trainingFile) {
-            payload.append('trainingData', trainingFile, originalFile.name);
+            payload.append('trainingData', trainingFile, trainingFile.name);
         }
         xhr.send(payload);
 

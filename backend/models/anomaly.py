@@ -61,7 +61,8 @@ def train_model_for_machine(user_id: str, machine_id: str, data_path: str) -> Di
     
     try:
         print(f"Loading data from {data_path} for machine {machine_id} of user {user_id}...")
-        df = pd.read_csv(data_path, sep=';', index_col='time_stamp', parse_dates=True)
+        # Read only the first 150,000 rows to approximate the first 5MB and ensure speed
+        df = pd.read_csv(data_path, sep=';', index_col='time_stamp', parse_dates=True, nrows=150000)
         df.dropna(axis=1, how='all', inplace=True)
         
         sensor_cols = sorted([col for col in df.columns if 'sensor' in col or 'power' in col or 'wind_speed' in col])
