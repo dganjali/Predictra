@@ -27,7 +27,7 @@ const storage = multer.diskStorage({
 const upload = multer({ 
     storage: storage,
     limits: {
-        fileSize: 50 * 1024 * 1024 // 50MB limit
+        fileSize: 500 * 1024 * 1024 // 500MB limit
     },
     fileFilter: function (req, file, cb) {
         const allowedTypes = [
@@ -215,13 +215,15 @@ router.post('/add-machine', auth, upload.single('trainingData'), async (req, res
             }
         }
         
-        // Validate sensors
+        /*
+        // Validate sensors - REMOVED PER USER REQUEST
         if (!machineData.sensors || machineData.sensors.length === 0) {
             return res.status(400).json({ 
                 success: false, 
                 message: 'At least one sensor must be selected' 
             });
         }
+        */
         
         // Validate training data file
         if (!req.file) {
