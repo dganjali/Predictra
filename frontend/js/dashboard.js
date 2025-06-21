@@ -226,6 +226,40 @@ function initAddMachineModal() {
     if (form) {
         form.addEventListener('submit', handleAddMachine);
     }
+
+    // Handle dynamic sensor inputs
+    const addSensorBtn = document.getElementById('addSensorBtn');
+    if (addSensorBtn) {
+        addSensorBtn.addEventListener('click', addSensorInput);
+    }
+
+    // Add one sensor input by default
+    addSensorInput();
+}
+
+let sensorCount = 0;
+function addSensorInput() {
+    sensorCount++;
+    const container = document.getElementById('sensorConfigContainer');
+    const newSensorRow = document.createElement('div');
+    newSensorRow.classList.add('sensor-row');
+    newSensorRow.setAttribute('data-id', sensorCount);
+
+    newSensorRow.innerHTML = `
+        <div class="form-group">
+            <label for="sensorName${sensorCount}">Sensor Name (e.g., Temperature, Pressure)</label>
+            <input type="text" id="sensorName${sensorCount}" name="sensorName" placeholder="Main Pump Temperature" required>
+        </div>
+        <div class="form-group">
+            <label for="sensorUnit${sensorCount}">Sensor Units (e.g., C, PSI)</label>
+            <input type="text" id="sensorUnit${sensorCount}" name="sensorUnit" placeholder="Celsius" required>
+        </div>
+        <button type="button" class="remove-sensor-btn" onclick="this.parentElement.remove()">
+            <i class="fas fa-trash-alt"></i>
+        </button>
+    `;
+
+    container.appendChild(newSensorRow);
 }
 
 function showFormError(fieldId, message) {
@@ -293,11 +327,28 @@ async function handleAddMachine(e) {
     try {
         const formData = new FormData(form);
         const machineData = {};
+        // Regular fields
         for (const [key, value] of formData.entries()) {
-            if (key !== 'trainingData') {
+            if (key !== 'trainingData' && key !== 'sensorName' && key !== 'sensorUnit') {
                 machineData[key] = value;
             }
         }
+
+        // Sensor fields
+        machineData.sensors = [];
+        const sensorRows = document.querySelectorAll('#sensorConfigContainer .sensor-row');
+        sensorRows.forEach((row, index) => {
+            const name = row.querySelector('input[name="sensorName"]').value;
+            const unit = row.querySelector('input[name="sensorUnit"]').value;
+            if (name && unit) {
+                 machineData.sensors.push({
+                    sensorId: `sensor_${index + 1}`, // Corresponds to CSV column headers
+                    name: name,
+                    type: name, // Using name as type for simplicity
+                    unit: unit
+                });
+            }
+        });
         
         const trainingFile = formData.get('trainingData');
 
