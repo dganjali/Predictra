@@ -1,7 +1,11 @@
+# General
 Flask==2.0.1
 Werkzeug==2.0.2
-numpy
-pandas
-scikit-learn
-tensorflow
-joblib 
+
+# ML & Data Processing
+# Pinned for compatibility with Python 3.10 and each other.
+numpy==1.24.4
+pandas==2.1.4
+scikit-learn==1.3.2
+tensorflow==2.15.0
+joblib==1.3.2 
