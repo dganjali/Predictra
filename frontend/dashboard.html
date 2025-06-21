@@ -269,132 +269,23 @@
                     </div>
                 </div>
 
-                <!-- Sensor Configuration -->
+                <!-- Data Source and Training -->
                 <div class="form-section">
-                    <h3>Sensor Configuration</h3>
-                    <p class="section-description">Select the sensors installed on this machine for anomaly detection training.</p>
-                    
-                    <div class="sensor-grid" id="sensorGrid">
-                        <div class="sensor-item">
-                            <input type="checkbox" id="sensor_temp" name="sensors" value="temperature" checked>
-                            <label for="sensor_temp">
-                                <i class="fas fa-thermometer-half"></i>
-                                Temperature
-                            </label>
-                        </div>
-                        <div class="sensor-item">
-                            <input type="checkbox" id="sensor_vibration" name="sensors" value="vibration" checked>
-                            <label for="sensor_vibration">
-                                <i class="fas fa-wave-square"></i>
-                                Vibration
-                            </label>
-                        </div>
-                        <div class="sensor-item">
-                            <input type="checkbox" id="sensor_pressure" name="sensors" value="pressure">
-                            <label for="sensor_pressure">
-                                <i class="fas fa-tachometer-alt"></i>
-                                Pressure
-                            </label>
-                        </div>
-                        <div class="sensor-item">
-                            <input type="checkbox" id="sensor_flow" name="sensors" value="flow_rate">
-                            <label for="sensor_flow">
-                                <i class="fas fa-water"></i>
-                                Flow Rate
-                            </label>
-                        </div>
-                        <div class="sensor-item">
-                            <input type="checkbox" id="sensor_current" name="sensors" value="current">
-                            <label for="sensor_current">
-                                <i class="fas fa-bolt"></i>
-                                Current
-                            </label>
-                        </div>
-                        <div class="sensor-item">
-                            <input type="checkbox" id="sensor_voltage" name="sensors" value="voltage">
-                            <label for="sensor_voltage">
-                                <i class="fas fa-plug"></i>
-                                Voltage
-                            </label>
-                        </div>
-                        <div class="sensor-item">
-                            <input type="checkbox" id="sensor_speed" name="sensors" value="speed">
-                            <label for="sensor_speed">
-                                <i class="fas fa-tachometer-alt"></i>
-                                Speed
-                            </label>
-                        </div>
-                        <div class="sensor-item">
-                            <input type="checkbox" id="sensor_torque" name="sensors" value="torque">
-                            <label for="sensor_torque">
-                                <i class="fas fa-cog"></i>
-                                Torque
-                            </label>
-                        </div>
-                        <div class="sensor-item">
-                            <input type="checkbox" id="sensor_oil" name="sensors" value="oil_level">
-                            <label for="sensor_oil">
-                                <i class="fas fa-oil-can"></i>
-                                Oil Level
-                            </label>
-                        </div>
-                        <div class="sensor-item">
-                            <input type="checkbox" id="sensor_noise" name="sensors" value="noise">
-                            <label for="sensor_noise">
-                                <i class="fas fa-volume-up"></i>
-                                Noise Level
-                            </label>
-                        </div>
-                        <div class="sensor-item">
-                            <input type="checkbox" id="sensor_humidity" name="sensors" value="humidity">
-                            <label for="sensor_humidity">
-                                <i class="fas fa-tint"></i>
-                                Humidity
-                            </label>
-                        </div>
-                        <div class="sensor-item">
-                            <input type="checkbox" id="sensor_power" name="sensors" value="power_factor">
-                            <label for="sensor_power">
-                                <i class="fas fa-chart-line"></i>
-                                Power Factor
-                            </label>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Training Data Upload -->
-                <div class="form-section">
-                    <h3>Training Data Upload</h3>
-                    <p class="section-description">Upload sensor data for training the anomaly detection model. Data should include timestamps and sensor readings.</p>
-                    
+                    <h3>Data Source & Model Training</h3>
                     <div class="form-group">
-                        <label for="trainingData">Training Data File</label>
-                        <div class="file-upload-area" id="fileUploadArea">
-                            <input type="file" id="trainingData" name="trainingData" accept=".csv,.xlsx,.xls,.json,.txt" required>
-                            <div class="upload-content">
-                                <i class="fas fa-cloud-upload-alt"></i>
-                                <p>Upload sensor data for anomaly detection training</p>
-                                <span>Required: CSV, Excel, JSON, or TXT with timestamps and sensor values</span>
-                            </div>
-                        </div>
-                        <div class="uploaded-files" id="uploadedFiles"></div>
+                        <label for="dataDescription">Description of Training Data</label>
+                        <textarea id="dataDescription" name="dataDescription" rows="3" placeholder="e.g., Normal operating data for 30 days under standard load. Contains columns for temperature, pressure, and vibration."></textarea>
                     </div>
-                    
                     <div class="form-group">
-                        <label for="dataDescription">Data Description</label>
-                        <textarea id="dataDescription" name="dataDescription" rows="3" placeholder="Describe the data: time period, operating conditions, known anomalies, etc."></textarea>
+                        <label for="trainingData">Upload Training Data File</label>
+                        <p class="form-hint">Upload a CSV or similar file with historical sensor data. This will be used to train the initial anomaly detection model for this machine. Max file size: 500MB.</p>
+                        <input type="file" id="trainingData" name="trainingData" accept=".csv,.txt,.json,.xls,.xlsx" required>
                     </div>
                 </div>
 
                 <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" id="cancelAdd">Cancel</button>
-                    <button type="submit" class="btn btn-primary">
-                        <span class="btn-text">Add Machine & Train Model</span>
-                        <span class="btn-loading">
-                            <i class="fas fa-spinner fa-spin"></i>
-                            Processing...
-                        </span>
-                    </button>
+                    <button type="button" class="btn btn-secondary" id="cancelAddMachine">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Machine & Begin Training</button>
                 </div>
             </form>
         </div>
