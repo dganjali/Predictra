@@ -15,6 +15,27 @@ from sklearn.preprocessing import StandardScaler
 import joblib
 from typing import List, Dict
 
+# --- Custom Callback for Keras ---
+class ProgressCallback(tf.keras.callbacks.Callback):
+    """A Keras callback to print structured JSON progress for each epoch."""
+    def __init__(self, total_epochs: int):
+        super().__init__()
+        self.total_epochs = total_epochs
+        self.training_start_progress = 50  # Progress percentage when training starts
+        self.training_end_progress = 90    # Progress percentage when training ends
+
+    def on_epoch_end(self, epoch, logs=None):
+        # Calculate the progress within the training phase (50% to 90%)
+        progress_in_phase = ((epoch + 1) / self.total_epochs)
+        current_overall_progress = self.training_start_progress + (progress_in_phase * (self.training_end_progress - self.training_start_progress))
+        
+        message = f"Epoch {epoch + 1}/{self.total_epochs} completed."
+        print(json.dumps({
+            "type": "progress",
+            "progress": int(current_overall_progress),
+            "message": message
+        }), flush=True)
+
 # --- Configuration ---
 BASE_MODELS_DIR = os.path.join(os.path.dirname(__file__), 'user_models')
 SEQUENCE_LEN = 10
@@ -118,47 +139,21 @@ def run_training_pipeline(user_id: str, machine_id: str, data_path: str, sensor_
             raise ValueError(f"Not enough data for training. At least {SEQUENCE_LEN} rows are required.")
 
         # STAGE 3: Model Training
-        print(json.dumps({"type": "progress", "progress": 50, "message": "Training model..."}), flush=True)
+        print(json.dumps({"type": "progress", "progress": 50, "message": "Initializing model training..."}), flush=True)
         
-        try:
-            # Ensure X_train has valid dimensions
-            print(f"Training data shape: {X_train.shape}", file=sys.stderr)
-            if X_train.shape[0] < BATCH_SIZE:
-                # If we have too few examples, reduce batch size
-                adjusted_batch_size = max(1, X_train.shape[0] // 2)
-                print(f"Warning: Few training examples. Reducing batch size from {BATCH_SIZE} to {adjusted_batch_size}", 
-                      file=sys.stderr)
-                batch_size = adjusted_batch_size
-            else:
-                batch_size = BATCH_SIZE
-                
-            # Create and compile model
-            model = Sequential([
-                LSTM(32, activation='relu', input_shape=(X_train.shape[1], X_train.shape[2]), return_sequences=False),
-                RepeatVector(X_train.shape[1]),
-                LSTM(32, activation='relu', return_sequences=True),
-                TimeDistributed(Dense(X_train.shape[2]))
-            ])
-            model.compile(optimizer='adam', loss='mae')
-            
-            # Train the model
-            model.fit(X_train, X_train, epochs=N_EPOCHS, batch_size=batch_size, verbose=0)
-            
-            # Try to save the model, handling potential errors
-            try:
-                model.save(paths['model_file'])
-            except Exception as model_save_error:
-                print(f"Error saving model: {str(model_save_error)}", file=sys.stderr)
-                # Try to save with a different format
-                try:
-                    tf.keras.models.save_model(model, paths['model_file'], save_format='h5')
-                    print("Saved model using alternative method", file=sys.stderr)
-                except Exception as alt_save_error:
-                    print(f"Alternative save method also failed: {str(alt_save_error)}", file=sys.stderr)
-                    raise
-        except Exception as training_error:
-            print(f"Error during model training: {str(training_error)}", file=sys.stderr)
-            raise
+        model = Sequential([
+            LSTM(32, activation='relu', input_shape=(X_train.shape[1], X_train.shape[2]), return_sequences=False),
+            RepeatVector(X_train.shape[1]),
+            LSTM(32, activation='relu', return_sequences=True),
+            TimeDistributed(Dense(X_train.shape[2]))
+        ])
+        model.compile(optimizer='adam', loss='mae')
+        
+        # Add the custom progress callback
+        progress_callback = ProgressCallback(total_epochs=N_EPOCHS)
+        model.fit(X_train, X_train, epochs=N_EPOCHS, batch_size=BATCH_SIZE, verbose=0, callbacks=[progress_callback])
+        
+        model.save(paths['model_file'])
 
         # STAGE 4: Threshold Calculation
         print(json.dumps({"type": "progress", "progress": 90, "message": "Calculating anomaly threshold..."}), flush=True)
