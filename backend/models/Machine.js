@@ -149,6 +149,12 @@ const machineSchema = new mongoose.Schema({
   statusDetails: {
     type: String
   },
+  trainingProgress: {
+    type: Number,
+    default: 0,
+    min: 0,
+    max: 100
+  },
   trainingMetrics: {
     type: Map,
     of: String

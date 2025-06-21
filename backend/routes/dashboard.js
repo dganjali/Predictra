@@ -341,15 +341,39 @@ function trainAnomalyDetectionModel(machineId, userId, dataPath, sensorNames) {
         const sensorNamesArg = sensorNames.join(',');
         const pythonProcess = spawn('python3', [pythonScriptPath, 'train', userId.toString(), machineId.toString(), dataPath, sensorNamesArg]);
 
-        let lastOutput = '';
+        let finalResult = null;
         let lastError = '';
 
-        pythonProcess.stdout.on('data', (data) => {
+        // Process stdout line by line
+        const handleOutput = async (data) => {
             const output = data.toString();
-            console.log(`[Training Output for ${machineId}]: ${output}`);
-            lastOutput += output;
-        });
+            // Split by newline in case multiple JSON objects are sent at once
+            const lines = output.split(/\\r?\\n/).filter(line => line.trim() !== '');
 
+            for (const line of lines) {
+                try {
+                    const result = JSON.parse(line);
+                    if (result.type === 'progress') {
+                        // This is a progress update
+                        await Machine.findByIdAndUpdate(machineId, {
+                            trainingProgress: result.progress,
+                            statusDetails: result.message
+                        });
+                    } else if (result.success) {
+                        // This is the final success message
+                        finalResult = result;
+                    } else {
+                        // This is a final failure message from the script
+                        lastError = result.error || 'Unknown training error.';
+                    }
+                } catch (e) {
+                    // Not a JSON line, just a regular log.
+                    console.log(`[Training Log for ${machineId}]: ${line}`);
+                }
+            }
+        };
+
+        pythonProcess.stdout.on('data', handleOutput);
         pythonProcess.stderr.on('data', (data) => {
             const errorMsg = data.toString();
             console.error(`[Training Error for ${machineId}]: ${errorMsg}`);
@@ -359,61 +383,44 @@ function trainAnomalyDetectionModel(machineId, userId, dataPath, sensorNames) {
         pythonProcess.on('close', async (code) => {
             console.log(`Training process for machine ${machineId} exited with code ${code}`);
             
-            // Clean up the uploaded file after training is complete
+            // Clean up the uploaded file
             if (fs.existsSync(dataPath)) {
-                fs.unlinkSync(dataPath);
-                console.log(`Cleaned up training data file: ${dataPath}`);
+                fs.unlinkSync(dataPath, (err) => {
+                    if(err) console.error(`Error deleting training file ${dataPath}:`, err)
+                });
             }
 
-            if (code === 0) {
-                // Try to parse the final output from the script
-                try {
-                    const result = JSON.parse(lastOutput);
-                    if (result.success) {
-                        await Machine.findByIdAndUpdate(machineId, { 
-                            modelStatus: 'trained',
-                            lastUpdated: Date.now(),
-                            lastTrained: Date.now(),
-                            operationalStatus: 'active',
-                            trainingMetrics: result.metrics || {}
-                        });
-                        console.log(`Model for machine ${machineId} trained successfully.`);
-                        resolve({ success: true, message: 'Model trained successfully.', machineId });
-                    } else {
-                        throw new Error(result.error || 'Unknown training error.');
-                    }
-                } catch (e) {
-                     // This can happen if the last line of stdout is not the JSON object
-                    console.error(`Error parsing training result for ${machineId}. Raw output: ${lastOutput}`, e);
-                    const failureReason = `Training failed: could not parse final result. Check logs.`;
-                    await Machine.findByIdAndUpdate(machineId, { 
-                        modelStatus: 'failed',
-                        operationalStatus: 'error',
-                        statusDetails: failureReason
-                    });
-                    reject(new Error(failureReason));
-                }
+            if (code === 0 && finalResult && finalResult.success) {
+                // Success
+                await Machine.findByIdAndUpdate(machineId, { 
+                    modelStatus: 'trained',
+                    trainingProgress: 100,
+                    lastUpdated: Date.now(),
+                    lastTrained: Date.now(),
+                    operationalStatus: 'active',
+                    statusDetails: 'Model trained successfully.',
+                    trainingMetrics: finalResult.metrics || {}
+                });
+                resolve({ success: true, message: 'Model trained successfully.' });
             } else {
-                // The script exited with an error code
-                const failureReason = `Training process failed with exit code ${code}. Error: ${lastError}`;
+                // Failure
+                const failureReason = `Training failed. Exit code: ${code}. Error: ${lastError}`;
                 await Machine.findByIdAndUpdate(machineId, { 
                     modelStatus: 'failed',
                     operationalStatus: 'error',
+                    trainingProgress: 0, // Reset progress on failure
                     statusDetails: failureReason
                 });
-                console.error(failureReason);
                 reject(new Error(failureReason));
             }
         });
 
         pythonProcess.on('error', (err) => {
+            // This is for errors spawning the process itself
             console.error('Failed to start training process:', err);
-            
-            // Clean up the uploaded file on spawn error
             if (fs.existsSync(dataPath)) {
                 fs.unlinkSync(dataPath);
             }
-
             reject(new Error('Failed to start training process.'));
         });
     });
@@ -442,6 +449,7 @@ router.get('/machine/:id/training-status', auth, async (req, res) => {
                 machineName: machine.machineName,
                 modelStatus: machine.modelStatus,
                 statusDetails: machine.statusDetails,
+                trainingProgress: machine.trainingProgress,
                 lastUpdated: machine.lastUpdated
             }
         });

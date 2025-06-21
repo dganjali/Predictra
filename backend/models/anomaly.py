@@ -54,6 +54,23 @@ def build_lstm_autoencoder(timesteps, n_features):
     model.compile(optimizer='adam', loss='mae')
     return model
 
+# --- Custom Callback for Progress Reporting ---
+class ProgressCallback(tf.keras.callbacks.Callback):
+    def __init__(self, total_epochs, machine_id):
+        super().__init__()
+        self.total_epochs = total_epochs
+        self.machine_id = machine_id
+
+    def on_epoch_end(self, epoch, logs=None):
+        progress_percentage = int(((epoch + 1) / self.total_epochs) * 100)
+        progress_data = {
+            "type": "progress",
+            "machine_id": self.machine_id,
+            "progress": progress_percentage,
+            "message": f"Epoch {epoch + 1}/{self.total_epochs} complete. Loss: {logs['loss']:.4f}"
+        }
+        print(json.dumps(progress_data), flush=True)
+
 # --- Training ---
 def train_model_for_machine(user_id: str, machine_id: str, data_path: str, sensor_columns: List[str]) -> Dict[str, Any]:
     """Main function to orchestrate the training process for a specific machine."""
@@ -109,7 +126,11 @@ def train_model_for_machine(user_id: str, machine_id: str, data_path: str, senso
         epochs=N_EPOCHS,
         batch_size=BATCH_SIZE,
         validation_split=0.1,
-        callbacks=[tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=3, mode='min')]
+        callbacks=[
+            tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=3, mode='min'),
+            ProgressCallback(total_epochs=N_EPOCHS, machine_id=machine_id)
+        ],
+        verbose=0 # Set verbose to 0 to avoid polluting stdout
     )
     
     print(f"--- Training finished in {time.time() - start_time:.2f} seconds. ---")

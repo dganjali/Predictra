@@ -923,6 +923,55 @@ a:hover {
     text-transform: capitalize;
 }
 
+.machine-card .status-badge.status-failed {
+    background-color: #ef4444; /* red */
+    color: white;
+}
+
+.machine-card .status-training-container {
+    display: flex;
+    flex-direction: column;
+    width: 120px;
+    gap: 4px;
+}
+
+.machine-card .status-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+.machine-card .progress-percentage {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: #6b7280;
+}
+
+.machine-card .progress-bar-container {
+    width: 100%;
+    background-color: #e5e7eb;
+    height: 6px;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.machine-card .progress-bar {
+    background-color: #3b82f6;
+    height: 100%;
+    transition: width 0.3s ease-in-out;
+}
+
+.machine-card .status-details-text {
+    font-size: 0.75rem;
+    color: #6b7280;
+    text-align: center;
+    width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .machine-card .card-body {
     padding: 1.5rem;
     display: grid;

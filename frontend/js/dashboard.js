@@ -417,6 +417,10 @@ async function handleAddMachine(e) {
     try {
         const formData = new FormData(form);
 
+        // Delete any existing 'trainingData' field to prevent duplicates.
+        // This ensures we use the file validated in step 2.
+        formData.delete('trainingData');
+
         // Append the stored file object to the form data
         if (machineConfig.file) {
             formData.append('trainingData', machineConfig.file, machineConfig.file.name);
@@ -594,24 +598,37 @@ function displayMachines(machines) {
         const lastUpdated = machine.lastUpdated ? new Date(machine.lastUpdated).toLocaleString() : 'Never';
         const modelStatus = machine.modelStatus || 'untrained';
 
-        let statusBadge;
+        let statusContent;
         if (modelStatus === 'training') {
-            statusBadge = `<span class="status-badge status-training"><i class="fas fa-sync-alt fa-spin"></i> Training...</span>`;
+            const progress = machine.trainingProgress || 0;
+            const details = machine.statusDetails || 'Initializing...';
+            statusContent = `
+                <div class="status-training-container">
+                    <div class="status-line">
+                        <span class="status-badge status-training"><i class="fas fa-sync-alt fa-spin"></i> Training...</span>
+                        <span class="progress-percentage">${progress}%</span>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" style="width: ${progress}%;"></div>
+                    </div>
+                    <div class="status-details-text">${details}</div>
+                </div>
+            `;
         } else if (modelStatus === 'failed') {
-            statusBadge = `<span class="status-badge status-failed" title="${machine.statusDetails || 'Training failed'}"><i class="fas fa-exclamation-triangle"></i> Failed</span>`;
+            statusContent = `<span class="status-badge status-failed" title="${machine.statusDetails || 'Training failed'}"><i class="fas fa-exclamation-triangle"></i> Failed</span>`;
         } else {
-            statusBadge = `<span class="status-badge" style="background-color: ${statusColor};">${machine.status}</span>`;
+            statusContent = `<span class="status-badge" style="background-color: ${statusColor};">${machine.status}</span>`;
         }
         
         return `
-            <div class="machine-card" id="machine-${machine.id}">
+            <div class="machine-card" id="machine-${machine.id}" data-model-status="${modelStatus}">
                 <div class="card-header">
                     <div class="machine-title">
                         <i class="fas fa-cogs machine-icon"></i>
                         <h3>${machine.name}</h3>
                     </div>
                     <div class="machine-actions">
-                        ${statusBadge}
+                        ${statusContent}
                         <div class="dropdown">
                             <button class="dropdown-toggle" ${modelStatus === 'training' ? 'disabled' : ''}><i class="fas fa-ellipsis-v"></i></button>
                             <div class="dropdown-menu">
@@ -649,6 +666,9 @@ function displayMachines(machines) {
         `;
     }).join('');
 
+    // Start polling for any machines that are currently training
+    startTrainingStatusPolling();
+
     // Add event listeners for new dropdowns
     document.querySelectorAll('.machine-card .dropdown-toggle').forEach(toggle => {
         toggle.addEventListener('click', (e) => {
@@ -671,6 +691,68 @@ window.addEventListener('click', (e) => {
         });
     }
 });
+
+let activePollers = {};
+
+function startTrainingStatusPolling() {
+    // Stop any pollers that are running for machines that are no longer training
+    Object.keys(activePollers).forEach(machineId => {
+        const machineCard = document.getElementById(`machine-${machineId}`);
+        if (!machineCard || machineCard.dataset.modelStatus !== 'training') {
+            clearInterval(activePollers[machineId]);
+            delete activePollers[machineId];
+        }
+    });
+
+    // Find all machines with 'training' status and start a poller if not already running
+    document.querySelectorAll('.machine-card[data-model-status="training"]').forEach(card => {
+        const machineId = card.id.replace('machine-', '');
+        if (!activePollers[machineId]) {
+            console.log(`Starting poller for machine ${machineId}`);
+            activePollers[machineId] = setInterval(() => {
+                pollMachineStatus(machineId);
+            }, 3000); // Poll every 3 seconds
+        }
+    });
+}
+
+async function pollMachineStatus(machineId) {
+    try {
+        const response = await fetch(`/api/dashboard/machine/${machineId}/training-status`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+
+        if (!response.ok) {
+            console.error(`Failed to get status for machine ${machineId}. Stopping poller.`);
+            clearInterval(activePollers[machineId]);
+            delete activePollers[machineId];
+            return;
+        }
+
+        const result = await response.json();
+        if (result.success) {
+            const machine = result.data;
+            const card = document.getElementById(`machine-${machineId}`);
+
+            if (machine.modelStatus === 'training') {
+                // Update progress bar and text
+                card.querySelector('.progress-bar').style.width = `${machine.trainingProgress}%`;
+                card.querySelector('.progress-percentage').textContent = `${machine.trainingProgress}%`;
+                card.querySelector('.status-details-text').textContent = machine.statusDetails;
+            } else {
+                // Training finished or failed, stop polling and refresh the entire dashboard
+                console.log(`Training finished for machine ${machineId}. Status: ${machine.modelStatus}. Stopping poller.`);
+                clearInterval(activePollers[machineId]);
+                delete activePollers[machineId];
+                loadDashboardData(); // Refresh to get the final card state
+            }
+        }
+    } catch (error) {
+        console.error(`Error polling for machine ${machineId}:`, error);
+        clearInterval(activePollers[machineId]);
+        delete activePollers[machineId];
+    }
+}
 
 function displayAlerts(alerts) {
     const activityList = document.getElementById('activityList');
