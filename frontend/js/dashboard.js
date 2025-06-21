@@ -976,7 +976,7 @@ function handleRemoveMachine(machineId) {
     const text = document.getElementById('confirmationModalText');
     const confirmBtn = document.getElementById('confirmAction');
 
-    const machine = allMachines.find(m => m.id === machineId);
+    const machine = allMachines.find(m => m._id === machineId);
     if (!machine) {
         showMessage('Could not find machine details to remove.', 'error');
         return;
@@ -1014,7 +1014,7 @@ function handleRemoveMachine(machineId) {
                     machineCard.remove();
                 }
                 // Update the global list
-                allMachines = allMachines.filter(m => m.id !== machineId);
+                allMachines = allMachines.filter(m => m._id !== machineId);
                 // Refresh data to update stats
                 loadDashboardData();
             } else {
