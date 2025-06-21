@@ -485,7 +485,7 @@ router.post('/machine/:id/predict', auth, async (req, res) => {
             console.error(`[Prediction Error for ${machine._id}]: ${data.toString()}`);
         });
 
-        pythonProcess.on('close', (code) => {
+        pythonProcess.on('close', async (code) => {
             // Clean up the temporary file
             fs.unlink(sequenceFilePath, (err) => {
                 if (err) console.error("Error deleting temp prediction file:", err);
