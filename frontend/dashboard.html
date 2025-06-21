@@ -139,47 +139,401 @@
     <div class="modal" id="addMachineModal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Add New Machine</h2>
+                <h2>Add New Machine - SCADA Configuration</h2>
                 <button class="modal-close" id="closeModal">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
             <form id="addMachineForm" class="modal-form">
-                <div class="form-group">
-                    <label for="machineName">Machine Name</label>
-                    <input type="text" id="machineName" name="machineName" required>
+                <!-- Basic Machine Information -->
+                <div class="form-section">
+                    <h3>Machine Identification</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="machineName">Machine Name</label>
+                            <input type="text" id="machineName" name="machineName" placeholder="e.g., Pump Station A, Conveyor Line 3" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="machineType">Machine Type</label>
+                            <select id="machineType" name="machineType" required>
+                                <option value="">Select machine type</option>
+                                <option value="pump">Pump</option>
+                                <option value="motor">Motor</option>
+                                <option value="compressor">Compressor</option>
+                                <option value="turbine">Turbine</option>
+                                <option value="conveyor">Conveyor</option>
+                                <option value="milling_machine">Milling Machine</option>
+                                <option value="lathe">Lathe</option>
+                                <option value="press">Press</option>
+                                <option value="furnace">Furnace</option>
+                                <option value="dryer">Dryer</option>
+                                <option value="fan">Fan</option>
+                                <option value="gearbox">Gearbox</option>
+                                <option value="bearing">Bearing</option>
+                                <option value="valve">Valve</option>
+                                <option value="heat_exchanger">Heat Exchanger</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="manufacturer">Manufacturer</label>
+                            <input type="text" id="manufacturer" name="manufacturer" placeholder="e.g., Siemens, ABB, GE" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="model">Model Number</label>
+                            <input type="text" id="model" name="model" placeholder="e.g., 1LE1001-1DB32, GX-5000" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="serialNumber">Serial Number</label>
+                            <input type="text" id="serialNumber" name="serialNumber" placeholder="e.g., SN2024-001234" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="assetTag">Asset Tag</label>
+                            <input type="text" id="assetTag" name="assetTag" placeholder="e.g., ASSET-2024-001" required>
+                        </div>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label for="machineType">Machine Type</label>
-                    <select id="machineType" name="machineType" required>
-                        <option value="">Select machine type</option>
-                        <option value="pump">Pump</option>
-                        <option value="motor">Motor</option>
-                        <option value="compressor">Compressor</option>
-                        <option value="turbine">Turbine</option>
-                        <option value="conveyor">Conveyor</option>
-                        <option value="other">Other</option>
-                    </select>
+
+                <!-- SCADA System Information -->
+                <div class="form-section">
+                    <h3>SCADA System Configuration</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="scadaSystem">SCADA System</label>
+                            <select id="scadaSystem" name="scadaSystem" required>
+                                <option value="">Select SCADA system</option>
+                                <option value="wonderware">Wonderware InTouch</option>
+                                <option value="siemens">Siemens WinCC</option>
+                                <option value="rockwell">Rockwell FactoryTalk</option>
+                                <option value="ge">GE iFIX</option>
+                                <option value="honeywell">Honeywell Experion</option>
+                                <option value="abb">ABB 800xA</option>
+                                <option value="schneider">Schneider ClearSCADA</option>
+                                <option value="custom">Custom/In-house</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="scadaVersion">SCADA Version</label>
+                            <input type="text" id="scadaVersion" name="scadaVersion" placeholder="e.g., 2020 R2, v11.0">
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="plcType">PLC Type</label>
+                            <select id="plcType" name="plcType">
+                                <option value="">Select PLC type</option>
+                                <option value="siemens_s7">Siemens S7</option>
+                                <option value="rockwell_controllogix">Rockwell ControlLogix</option>
+                                <option value="rockwell_compactlogix">Rockwell CompactLogix</option>
+                                <option value="schneider_modicon">Schneider Modicon</option>
+                                <option value="abb_800xa">ABB 800xA</option>
+                                <option value="ge_rx3i">GE RX3i</option>
+                                <option value="honeywell_c300">Honeywell C300</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="communicationProtocol">Communication Protocol</label>
+                            <select id="communicationProtocol" name="communicationProtocol">
+                                <option value="">Select protocol</option>
+                                <option value="modbus_tcp">Modbus TCP</option>
+                                <option value="modbus_rtu">Modbus RTU</option>
+                                <option value="opc_ua">OPC UA</option>
+                                <option value="opc_da">OPC DA</option>
+                                <option value="ethernet_ip">Ethernet/IP</option>
+                                <option value="profinet">PROFINET</option>
+                                <option value="profibus">PROFIBUS</option>
+                                <option value="hart">HART</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="ipAddress">IP Address</label>
+                            <input type="text" id="ipAddress" name="ipAddress" placeholder="e.g., 192.168.1.100">
+                        </div>
+                        <div class="form-group">
+                            <label for="port">Port</label>
+                            <input type="number" id="port" name="port" placeholder="e.g., 502, 4840">
+                        </div>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label for="location">Location</label>
-                    <input type="text" id="location" name="location" required>
+
+                <!-- Operational Information -->
+                <div class="form-section">
+                    <h3>Operational Parameters</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="location">Physical Location</label>
+                            <input type="text" id="location" name="location" placeholder="e.g., Building A, Floor 2, Line 3" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="department">Department</label>
+                            <input type="text" id="department" name="department" placeholder="e.g., Production, Maintenance, Utilities">
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="installationDate">Installation Date</label>
+                            <input type="date" id="installationDate" name="installationDate" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="lastMaintenance">Last Maintenance Date</label>
+                            <input type="date" id="lastMaintenance" name="lastMaintenance">
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="operatingHours">Operating Hours/Day</label>
+                            <input type="number" id="operatingHours" name="operatingHours" min="0" max="24" placeholder="e.g., 16">
+                        </div>
+                        <div class="form-group">
+                            <label for="maintenanceInterval">Maintenance Interval (days)</label>
+                            <input type="number" id="maintenanceInterval" name="maintenanceInterval" min="1" placeholder="e.g., 180">
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="criticality">Criticality Level</label>
+                            <select id="criticality" name="criticality" required>
+                                <option value="">Select criticality</option>
+                                <option value="critical">Critical - Production stops if fails</option>
+                                <option value="important">Important - Production affected if fails</option>
+                                <option value="normal">Normal - Minimal production impact</option>
+                                <option value="low">Low - No production impact</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="operatingMode">Operating Mode</label>
+                            <select id="operatingMode" name="operatingMode">
+                                <option value="">Select mode</option>
+                                <option value="continuous">Continuous</option>
+                                <option value="intermittent">Intermittent</option>
+                                <option value="batch">Batch</option>
+                                <option value="standby">Standby</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label for="manufacturer">Manufacturer</label>
-                    <input type="text" id="manufacturer" name="manufacturer" required>
+
+                <!-- Sensor Configuration -->
+                <div class="form-section">
+                    <h3>Sensor Configuration</h3>
+                    <p class="section-description">Select the sensors installed on this machine for anomaly detection training.</p>
+                    
+                    <div class="sensor-grid" id="sensorGrid">
+                        <div class="sensor-item">
+                            <input type="checkbox" id="sensor_temp" name="sensors" value="temperature" checked>
+                            <label for="sensor_temp">
+                                <i class="fas fa-thermometer-half"></i>
+                                Temperature
+                            </label>
+                        </div>
+                        <div class="sensor-item">
+                            <input type="checkbox" id="sensor_vibration" name="sensors" value="vibration" checked>
+                            <label for="sensor_vibration">
+                                <i class="fas fa-wave-square"></i>
+                                Vibration
+                            </label>
+                        </div>
+                        <div class="sensor-item">
+                            <input type="checkbox" id="sensor_pressure" name="sensors" value="pressure">
+                            <label for="sensor_pressure">
+                                <i class="fas fa-tachometer-alt"></i>
+                                Pressure
+                            </label>
+                        </div>
+                        <div class="sensor-item">
+                            <input type="checkbox" id="sensor_flow" name="sensors" value="flow_rate">
+                            <label for="sensor_flow">
+                                <i class="fas fa-water"></i>
+                                Flow Rate
+                            </label>
+                        </div>
+                        <div class="sensor-item">
+                            <input type="checkbox" id="sensor_current" name="sensors" value="current">
+                            <label for="sensor_current">
+                                <i class="fas fa-bolt"></i>
+                                Current
+                            </label>
+                        </div>
+                        <div class="sensor-item">
+                            <input type="checkbox" id="sensor_voltage" name="sensors" value="voltage">
+                            <label for="sensor_voltage">
+                                <i class="fas fa-plug"></i>
+                                Voltage
+                            </label>
+                        </div>
+                        <div class="sensor-item">
+                            <input type="checkbox" id="sensor_speed" name="sensors" value="speed">
+                            <label for="sensor_speed">
+                                <i class="fas fa-tachometer-alt"></i>
+                                Speed
+                            </label>
+                        </div>
+                        <div class="sensor-item">
+                            <input type="checkbox" id="sensor_torque" name="sensors" value="torque">
+                            <label for="sensor_torque">
+                                <i class="fas fa-cog"></i>
+                                Torque
+                            </label>
+                        </div>
+                        <div class="sensor-item">
+                            <input type="checkbox" id="sensor_oil" name="sensors" value="oil_level">
+                            <label for="sensor_oil">
+                                <i class="fas fa-oil-can"></i>
+                                Oil Level
+                            </label>
+                        </div>
+                        <div class="sensor-item">
+                            <input type="checkbox" id="sensor_noise" name="sensors" value="noise">
+                            <label for="sensor_noise">
+                                <i class="fas fa-volume-up"></i>
+                                Noise Level
+                            </label>
+                        </div>
+                        <div class="sensor-item">
+                            <input type="checkbox" id="sensor_humidity" name="sensors" value="humidity">
+                            <label for="sensor_humidity">
+                                <i class="fas fa-tint"></i>
+                                Humidity
+                            </label>
+                        </div>
+                        <div class="sensor-item">
+                            <input type="checkbox" id="sensor_power" name="sensors" value="power_factor">
+                            <label for="sensor_power">
+                                <i class="fas fa-chart-line"></i>
+                                Power Factor
+                            </label>
+                        </div>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label for="model">Model</label>
-                    <input type="text" id="model" name="model" required>
+
+                <!-- Training Data Upload -->
+                <div class="form-section">
+                    <h3>Anomaly Detection Training Data</h3>
+                    <p class="section-description">Upload sequential sensor data snapshots for training the anomaly detection algorithm. Data should include timestamps and sensor readings.</p>
+                    
+                    <div class="form-group">
+                        <label for="trainingData">Training Data File</label>
+                        <div class="file-upload-area" id="fileUploadArea">
+                            <input type="file" id="trainingData" name="trainingData" accept=".csv,.xlsx,.xls,.json,.txt" required>
+                            <div class="upload-content">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                                <p>Upload sensor data for anomaly detection training</p>
+                                <span>Required: CSV, Excel, JSON, or TXT with timestamps and sensor values</span>
+                            </div>
+                        </div>
+                        <div class="uploaded-files" id="uploadedFiles"></div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="dataDescription">Data Description</label>
+                        <textarea id="dataDescription" name="dataDescription" rows="3" placeholder="Describe the data: time period, operating conditions, known anomalies, etc."></textarea>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="dataStartDate">Data Start Date</label>
+                            <input type="date" id="dataStartDate" name="dataStartDate">
+                        </div>
+                        <div class="form-group">
+                            <label for="dataEndDate">Data End Date</label>
+                            <input type="date" id="dataEndDate" name="dataEndDate">
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="samplingRate">Sampling Rate (seconds)</label>
+                            <input type="number" id="samplingRate" name="samplingRate" min="1" placeholder="e.g., 60">
+                        </div>
+                        <div class="form-group">
+                            <label for="dataPoints">Number of Data Points</label>
+                            <input type="number" id="dataPoints" name="dataPoints" min="1" placeholder="e.g., 10000">
+                        </div>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label for="installationDate">Installation Date</label>
-                    <input type="date" id="installationDate" name="installationDate" required>
+
+                <!-- Algorithm Configuration -->
+                <div class="form-section">
+                    <h3>Anomaly Detection Configuration</h3>
+                    <p class="section-description">Configure the anomaly detection algorithm parameters for this machine.</p>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="detectionAlgorithm">Detection Algorithm</label>
+                            <select id="detectionAlgorithm" name="detectionAlgorithm" required>
+                                <option value="">Select algorithm</option>
+                                <option value="autoencoder">Autoencoder (Deep Learning)</option>
+                                <option value="isolation_forest">Isolation Forest</option>
+                                <option value="one_class_svm">One-Class SVM</option>
+                                <option value="local_outlier_factor">Local Outlier Factor</option>
+                                <option value="elliptic_envelope">Elliptic Envelope</option>
+                                <option value="auto">Auto-select based on data</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="sensitivity">Detection Sensitivity</label>
+                            <select id="sensitivity" name="sensitivity" required>
+                                <option value="0.95">High (95% - Fewer false positives)</option>
+                                <option value="0.90" selected>Medium (90% - Balanced)</option>
+                                <option value="0.85">Low (85% - More sensitive)</option>
+                                <option value="0.80">Very Low (80% - Most sensitive)</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="trainingSplit">Training Data Split (%)</label>
+                            <input type="number" id="trainingSplit" name="trainingSplit" min="50" max="90" value="80" placeholder="80">
+                        </div>
+                        <div class="form-group">
+                            <label for="validationSplit">Validation Data Split (%)</label>
+                            <input type="number" id="validationSplit" name="validationSplit" min="10" max="30" value="20" placeholder="20">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="enableRealTime" name="enableRealTime" checked>
+                            <span class="checkmark"></span>
+                            Enable real-time anomaly detection
+                        </label>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="enableRetraining" name="enableRetraining">
+                            <span class="checkmark"></span>
+                            Enable automatic model retraining
+                        </label>
+                    </div>
                 </div>
+
                 <div class="form-actions">
                     <button type="button" class="btn btn-secondary" id="cancelAdd">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Add Machine</button>
+                    <button type="submit" class="btn btn-primary">
+                        <span class="btn-text">Add Machine & Train Model</span>
+                        <span class="btn-loading">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            Processing...
+                        </span>
+                    </button>
                 </div>
             </form>
         </div>
