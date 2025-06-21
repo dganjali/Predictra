@@ -24,7 +24,17 @@ BATCH_SIZE = 32
 def get_model_paths(user_id: str, machine_id: str) -> Dict[str, str]:
     """Generates the full file paths for a machine's model and related artifacts."""
     machine_dir = os.path.join(BASE_MODELS_DIR, f"user_{user_id}", f"machine_{machine_id}")
-    os.makedirs(machine_dir, exist_ok=True)
+    try:
+        os.makedirs(machine_dir, exist_ok=True)
+        print(f"Created directory: {machine_dir}", file=sys.stderr, flush=True)
+    except Exception as e:
+        print(f"Error creating directory {machine_dir}: {str(e)}", file=sys.stderr, flush=True)
+        # Try to create the parent directory structure
+        parent_dir = os.path.join(BASE_MODELS_DIR, f"user_{user_id}")
+        os.makedirs(parent_dir, exist_ok=True)
+        # Then try again with the machine directory
+        os.makedirs(machine_dir, exist_ok=True)
+        
     return {
         "model_file": os.path.join(machine_dir, 'model.h5'),
         "scaler_file": os.path.join(machine_dir, 'scaler.pkl'),
@@ -56,14 +66,43 @@ def run_training_pipeline(user_id: str, machine_id: str, data_path: str, sensor_
         with open(data_path, 'r', errors='ignore') as f:
             delimiter = ';' if f.readline().count(';') > 1 else ','
         
-        required_cols = list(set(sensor_columns + ['time_stamp']))
+        # First load the file to see all available columns
+        df_all = pd.read_csv(data_path, sep=delimiter, nrows=1)
+        available_cols = df_all.columns.tolist()
+        
+        # Check which sensor columns are actually in the CSV file
+        available_sensors = [col for col in sensor_columns if col in available_cols]
+        
+        if 'time_stamp' not in available_cols:
+            # Try to find a timestamp column
+            timestamp_synonyms = ['timestamp', 'timestamps', 'time_stamp', 'date']
+            for col in available_cols:
+                if col.lower() in [ts.lower() for ts in timestamp_synonyms]:
+                    # Rename this column to time_stamp in the next read
+                    ts_col = col
+                    break
+            else:
+                raise ValueError("No timestamp column found in CSV file.")
+        else:
+            ts_col = 'time_stamp'
+            
+        # Load the full data with only the columns we know exist
+        required_cols = list(set(available_sensors + [ts_col]))
         df = pd.read_csv(data_path, sep=delimiter, usecols=required_cols, 
-                         parse_dates=['time_stamp'], index_col='time_stamp', nrows=row_limit)
+                         parse_dates=[ts_col], nrows=row_limit)
+        
+        # Rename timestamp column if needed
+        if ts_col != 'time_stamp':
+            df.rename(columns={ts_col: 'time_stamp'}, inplace=True)
+        
+        # Set the index
+        df.set_index('time_stamp', inplace=True)
 
         # STAGE 2: Data Preprocessing
         print(json.dumps({"type": "progress", "progress": 25, "message": "Preprocessing data..."}), flush=True)
         
-        df_features = df[sorted(sensor_columns)] # Sort for consistent column order
+        # Only use the sensors that were actually found in the CSV
+        df_features = df[sorted(available_sensors)] # Sort for consistent column order
         df_features.dropna(inplace=True)
         if df_features.empty:
             raise ValueError("No data remains after removing rows with null values.")
@@ -81,37 +120,102 @@ def run_training_pipeline(user_id: str, machine_id: str, data_path: str, sensor_
         # STAGE 3: Model Training
         print(json.dumps({"type": "progress", "progress": 50, "message": "Training model..."}), flush=True)
         
-        model = Sequential([
-            LSTM(32, activation='relu', input_shape=(X_train.shape[1], X_train.shape[2]), return_sequences=False),
-            RepeatVector(X_train.shape[1]),
-            LSTM(32, activation='relu', return_sequences=True),
-            TimeDistributed(Dense(X_train.shape[2]))
-        ])
-        model.compile(optimizer='adam', loss='mae')
-        model.fit(X_train, X_train, epochs=N_EPOCHS, batch_size=BATCH_SIZE, verbose=0)
-        model.save(paths['model_file'])
+        try:
+            # Ensure X_train has valid dimensions
+            print(f"Training data shape: {X_train.shape}", file=sys.stderr)
+            if X_train.shape[0] < BATCH_SIZE:
+                # If we have too few examples, reduce batch size
+                adjusted_batch_size = max(1, X_train.shape[0] // 2)
+                print(f"Warning: Few training examples. Reducing batch size from {BATCH_SIZE} to {adjusted_batch_size}", 
+                      file=sys.stderr)
+                batch_size = adjusted_batch_size
+            else:
+                batch_size = BATCH_SIZE
+                
+            # Create and compile model
+            model = Sequential([
+                LSTM(32, activation='relu', input_shape=(X_train.shape[1], X_train.shape[2]), return_sequences=False),
+                RepeatVector(X_train.shape[1]),
+                LSTM(32, activation='relu', return_sequences=True),
+                TimeDistributed(Dense(X_train.shape[2]))
+            ])
+            model.compile(optimizer='adam', loss='mae')
+            
+            # Train the model
+            model.fit(X_train, X_train, epochs=N_EPOCHS, batch_size=batch_size, verbose=0)
+            
+            # Try to save the model, handling potential errors
+            try:
+                model.save(paths['model_file'])
+            except Exception as model_save_error:
+                print(f"Error saving model: {str(model_save_error)}", file=sys.stderr)
+                # Try to save with a different format
+                try:
+                    tf.keras.models.save_model(model, paths['model_file'], save_format='h5')
+                    print("Saved model using alternative method", file=sys.stderr)
+                except Exception as alt_save_error:
+                    print(f"Alternative save method also failed: {str(alt_save_error)}", file=sys.stderr)
+                    raise
+        except Exception as training_error:
+            print(f"Error during model training: {str(training_error)}", file=sys.stderr)
+            raise
 
         # STAGE 4: Threshold Calculation
         print(json.dumps({"type": "progress", "progress": 90, "message": "Calculating anomaly threshold..."}), flush=True)
         
-        X_train_pred = model.predict(X_train)
-        train_mae_loss = np.mean(np.abs(X_train_pred - X_train), axis=1)
-        threshold = np.max(train_mae_loss)
-        
-        with open(paths['threshold_file'], 'w') as f:
-            json.dump({'threshold': float(threshold)}, f)
-        
-        # STAGE 5: Success
-        print(json.dumps({"success": True, "message": "Training completed successfully."}), flush=True)
+        try:
+            # Use smaller batches for prediction if needed
+            if X_train.shape[0] > 1000:
+                X_train_pred = np.vstack([model.predict(X_train[i:i+1000]) 
+                                         for i in range(0, X_train.shape[0], 1000)])
+            else:
+                X_train_pred = model.predict(X_train)
+                
+            # Calculate loss and determine threshold
+            train_mae_loss = np.mean(np.abs(X_train_pred - X_train), axis=(1, 2))
+            
+            # Ensure we have a valid threshold (not NaN or Inf)
+            if np.isnan(train_mae_loss).any() or np.isinf(train_mae_loss).any():
+                print("Warning: NaN or Inf values in loss, using filtering", file=sys.stderr)
+                train_mae_loss = train_mae_loss[~np.isnan(train_mae_loss) & ~np.isinf(train_mae_loss)]
+                
+            if len(train_mae_loss) == 0:
+                raise ValueError("All loss values are invalid (NaN or Inf)")
+                
+            # Set threshold as 99th percentile to be more robust against outliers
+            threshold = float(np.percentile(train_mae_loss, 99))
+            
+            # Save the threshold and other useful metrics
+            threshold_data = {
+                'threshold': threshold,
+                'mean_loss': float(np.mean(train_mae_loss)),
+                'max_loss': float(np.max(train_mae_loss)),
+                'min_loss': float(np.min(train_mae_loss)),
+                'std_loss': float(np.std(train_mae_loss))
+            }
+            
+            # Ensure directory exists
+            os.makedirs(os.path.dirname(paths['threshold_file']), exist_ok=True)
+            
+            with open(paths['threshold_file'], 'w') as f:
+                json.dump(threshold_data, f)
+            
+            print(f"Saved threshold file to {paths['threshold_file']}", file=sys.stderr)
+            
+            # STAGE 5: Success
+            print(json.dumps({"success": True, "message": "Training completed successfully."}), flush=True)
+            
+        except Exception as e:
+            print(f"Error in threshold calculation: {str(e)}", file=sys.stderr)
+            raise
 
     except Exception as e:
         # Catch any and all exceptions and report them cleanly as a JSON error.
         print(json.dumps({"success": False, "error": f"A critical error occurred: {str(e)}"}), flush=True)
     
     finally:
-        # Ensure the temporary data file is always deleted.
-        if os.path.exists(data_path):
-            os.remove(data_path)
+        # Only remove the file if we were asked to (file cleanup should be handled by caller)
+        pass
 
 if __name__ == "__main__":
     if len(sys.argv) not in [6, 7]:

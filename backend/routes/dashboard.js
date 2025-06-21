@@ -245,18 +245,46 @@ async function trainModel(machine, user) {
     const TRAINING_ROW_LIMIT = 20000;
 
     try {
-        await Machine.findByIdAndUpdate(machineId, { training_status: 'in_progress' });
+        await Machine.findByIdAndUpdate(machineId, { 
+            training_status: 'in_progress',
+            training_message: 'Preparing data for training...' 
+        });
         
-        const timestampSynonyms = ['timestamp', 'timestamps', 'time_stamp', 'date'];
-        let timestampColumn = '';
+        // Make sure the file exists
+        if (!fs.existsSync(filePath)) {
+            throw new Error(`Training file not found at path: ${filePath}`);
+        }
+        
+        // Create the directories for model storage
+        const modelsDir = path.join(__dirname, '../models/user_models');
+        const userDir = path.join(modelsDir, `user_${userId}`);
+        const machineDir = path.join(userDir, `machine_${machineId}`);
+        
+        fs.mkdirSync(modelsDir, { recursive: true });
+        fs.mkdirSync(userDir, { recursive: true });
+        fs.mkdirSync(machineDir, { recursive: true });
+        
+        console.log(`Created directories for model storage: ${machineDir}`);
+        
+        // Read the file to determine format
         const data = fs.readFileSync(filePath, 'utf8');
         const lines = data.split(/\r?\n/);
+        if (lines.length < 2) {
+            throw new Error('CSV file has insufficient data (less than 2 lines)');
+        }
+        
         const header = lines[0];
-        const fileColumns = header.split(/[,;]/).map(c => c.trim());
-
-
+        const delimiter = header.includes(';') ? ';' : ',';
+        const fileColumns = header.split(delimiter).map(c => c.trim());
+        
+        console.log(`CSV header columns: ${fileColumns.join(', ')}`);
+        
+        // Find timestamp column
+        const timestampSynonyms = ['timestamp', 'timestamps', 'time_stamp', 'date'];
+        let timestampColumn = '';
+        
         for (const col of fileColumns) {
-            if(timestampSynonyms.includes(col.toLowerCase())) {
+            if (timestampSynonyms.includes(col.toLowerCase())) {
                 timestampColumn = col;
                 break;
             }
@@ -266,26 +294,53 @@ async function trainModel(machine, user) {
             lines[0] = header.replace(timestampColumn, 'time_stamp');
             const updatedData = lines.join('\n');
             fs.writeFileSync(filePath, updatedData);
+            console.log(`Renamed timestamp column ${timestampColumn} to time_stamp`);
         } else if (!timestampColumn) {
             throw new Error('No timestamp column found in the CSV file. Please use one of: ' + timestampSynonyms.join(', '));
         }
 
+        // Filter out ID and timestamp columns for model training
         const idSynonyms = ['id', 'machine_id'];
-        columns = columns.filter(c => !timestampSynonyms.includes(c.toLowerCase()) && !idSynonyms.includes(c.toLowerCase()));
+        const validColumns = columns.filter(col => {
+            const colLower = col.toLowerCase();
+            const isTimestamp = timestampSynonyms.includes(colLower);
+            const isId = idSynonyms.includes(colLower);
+            const exists = fileColumns.includes(col);
+            
+            if (!exists) {
+                console.log(`Warning: Selected column "${col}" not found in CSV file`);
+            }
+            
+            return !isTimestamp && !isId && exists;
+        });
         
-        const pythonProcess = spawn('python3', [
-            path.join(__dirname, '../models/anomaly.py'),
+        if (validColumns.length === 0) {
+            throw new Error('No valid sensor columns found in the CSV file after filtering');
+        }
+        
+        console.log(`Using columns for training: ${validColumns.join(', ')}`);
+        
+        // Start the Python training process
+        const pythonPath = process.env.PYTHON_PATH || 'python3';
+        const pythonScript = path.join(__dirname, '../models/anomaly.py');
+        
+        const pythonProcess = spawn(pythonPath, [
+            pythonScript,
             'train',
             userId,
             machineId,
             filePath,
-            columns.join(','),
+            validColumns.join(','),
             TRAINING_ROW_LIMIT.toString()
         ]);
 
         let lastJsonOutput = '';
+        let errorOutput = '';
+        
         pythonProcess.stdout.on('data', async (data) => {
             const output = data.toString();
+            console.log(`[TRAIN-STDOUT ${machineId}]: ${output}`);
+            
             // The script may output multiple JSONs in one chunk, separated by newlines
             const jsonStrings = output.trim().split('\n');
             
@@ -299,6 +354,14 @@ async function trainModel(machine, user) {
                             training_progress: result.progress,
                             training_message: result.message
                         });
+                    } else if (result.error) {
+                        // Error from Python script
+                        errorOutput += result.error + '\n';
+                        console.error(`[TRAIN-ERROR ${machineId}]: ${result.error}`);
+                        await Machine.findByIdAndUpdate(machineId, {
+                            training_status: 'failed',
+                            training_message: `Failed: ${result.error}`
+                        });
                     }
                 } catch (e) {
                     console.log(`[TRAIN-LOG ${machineId}]: (non-JSON) ${jsonString}`);
@@ -307,28 +370,55 @@ async function trainModel(machine, user) {
         });
 
         pythonProcess.stderr.on('data', (data) => {
-            console.error(`[TRAIN-ERR ${machineId}]: ${data.toString()}`);
+            const stderr = data.toString();
+            errorOutput += stderr;
+            console.error(`[TRAIN-ERR ${machineId}]: ${stderr}`);
         });
 
         pythonProcess.on('close', async (code) => {
             console.log(`[TRAIN-CLOSE ${machineId}]: child process exited with code ${code}`);
             try {
-                const result = JSON.parse(lastJsonOutput);
-                if (code === 0 && result.success) {
-                    const paths = getModelPaths(userId, machineId);
-                    const thresholdData = fs.readFileSync(paths.threshold_file, 'utf8');
-                    await Machine.findByIdAndUpdate(machineId, {
-                        training_status: 'completed',
-                        model_params: JSON.parse(thresholdData),
-                        modelStatus: 'trained'
-                    });
-                    console.log(`Training completed successfully for machine ${machineId}`);
+                // Check if the model files were created
+                const paths = getModelPaths(userId, machineId);
+                const modelFilesExist = fs.existsSync(paths.model_file) && fs.existsSync(paths.threshold_file);
+                
+                if (code === 0 && lastJsonOutput) {
+                    try {
+                        const result = JSON.parse(lastJsonOutput);
+                        if (result.success) {
+                            if (modelFilesExist) {
+                                const thresholdData = fs.readFileSync(paths.threshold_file, 'utf8');
+                                await Machine.findByIdAndUpdate(machineId, {
+                                    training_status: 'completed',
+                                    model_params: JSON.parse(thresholdData),
+                                    modelStatus: 'trained',
+                                    training_message: 'Training completed successfully.'
+                                });
+                                console.log(`Training completed successfully for machine ${machineId}`);
+                            } else {
+                                throw new Error('Model training completed but model files were not created.');
+                            }
+                        } else {
+                            throw new Error(result.error || 'Training completed with errors');
+                        }
+                    } catch (parseError) {
+                        throw new Error(`Error parsing Python output: ${parseError.message}`);
+                    }
                 } else {
-                    throw new Error(result.error || 'Unknown training error');
+                    // Process exited with non-zero code or no valid JSON output
+                    let errorMsg = `Training failed with exit code ${code}.`;
+                    if (errorOutput) {
+                        errorMsg += ` Error: ${errorOutput.substring(0, 500)}`; // Trim if too long
+                    }
+                    throw new Error(errorMsg);
                 }
             } catch (e) {
-                await Machine.findByIdAndUpdate(machineId, { training_status: 'failed' });
-                console.error(`Failed to update machine status after training for ${machineId}: ${e.message}`);
+                const errorMessage = e.message || 'Unknown training error';
+                console.error(`Training failed for machine ${machineId}: ${errorMessage}`);
+                await Machine.findByIdAndUpdate(machineId, { 
+                    training_status: 'failed',
+                    training_message: `Training failed: ${errorMessage.substring(0, 255)}`
+                });
             }
         });
 

@@ -399,19 +399,43 @@ function initAddMachineModal() {
         submitBtn.disabled = true;
         submitBtn.textContent = 'Processing...';
         
+        showMessage('Uploading data and starting training...', 'info');
+        
         try {
-            const response = await fetch('/api/dashboard/machines', { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: formData });
+            const response = await fetch('/api/dashboard/machines', { 
+                method: 'POST', 
+                headers: { 'Authorization': `Bearer ${token}` }, 
+                body: formData 
+            });
+            
+            if (!response.ok) {
+                if (response.status === 500) {
+                    console.error('Server error (500) when adding machine');
+                    showMessage('Server error during model training. Please check server logs for details.', 'error');
+                    return;
+                }
+            }
+            
             const data = await response.json();
             if (!data.success) {
-                showMessage(data.message, 'error');
+                showMessage(`Error: ${data.message}`, 'error');
                 return;
             }
-            showMessage('Machine added and training started!', 'success');
+            
+            showMessage('Machine added successfully! Training process has started.', 'success');
             closeModal();
             loadDashboardData();
+            
+            // Wait a moment and then poll for training status
+            setTimeout(() => {
+                if (data.machine && data.machine._id) {
+                    startTrainingStatusPolling(data.machine._id);
+                }
+            }, 2000);
+            
         } catch (error) {
             console.error('Error adding machine:', error);
-            showMessage('Error adding machine. Please try again.', 'error');
+            showMessage('Network error when adding machine. Please check your connection and try again.', 'error');
         } finally {
             submitBtn.disabled = false;
             submitBtn.textContent = 'Add Machine & Train';
