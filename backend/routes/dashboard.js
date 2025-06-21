@@ -2,47 +2,32 @@ const express = require('express');
 const { auth } = require('../middleware/auth');
 const User = require('../models/User');
 const Machine = require('../models/Machine');
-const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const multer = require('multer');
 const { spawn } = require('child_process');
-const readline = require('readline');
 
 const router = express.Router();
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        const uploadDir = path.join(__dirname, '..', 'uploads', 'training_data');
-        if (!fs.existsSync(uploadDir)) {
-            fs.mkdirSync(uploadDir, { recursive: true });
-        }
-        cb(null, uploadDir);
+    destination: (req, file, cb) => {
+        const uploadPath = path.join(__dirname, '../uploads');
+        fs.mkdirSync(uploadPath, { recursive: true });
+        cb(null, uploadPath);
     },
-    filename: function (req, file, cb) {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+    filename: (req, file, cb) => {
+        cb(null, `${Date.now()}-${file.originalname}`);
     }
 });
 
-const upload = multer({ 
+const upload = multer({
     storage: storage,
-    limits: {
-        fileSize: 100 * 1024 * 1024 // 100MB limit
-    },
-    fileFilter: function (req, file, cb) {
-        const allowedTypes = [
-            'text/csv',
-            'application/vnd.ms-excel',
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'application/json',
-            'text/plain'
-        ];
-        
-        if (allowedTypes.includes(file.mimetype)) {
+    fileFilter: (req, file, cb) => {
+        if (file.mimetype === 'text/csv' || file.originalname.endsWith('.csv')) {
             cb(null, true);
         } else {
-            cb(new Error('Invalid file type. Only CSV, Excel, JSON, and TXT files are allowed.'), false);
+            cb(new Error('Only .csv files are allowed!'), false);
         }
     }
 });
@@ -211,251 +196,161 @@ router.get('/data', auth, async (req, res) => {
     }
 });
 
-// Add new machine with SCADA configuration and training data
-router.post('/add-machine', auth, upload.single('trainingData'), async (req, res) => {
-    // Set a long timeout for this specific route, e.g., 15 minutes
-    req.setTimeout(900000);
-
+// @route   POST /api/dashboard/machines
+// @desc    Add a new machine, optionally with a CSV for training
+// @access  Private
+router.post('/machines', auth, upload.single('csvFile'), async (req, res) => {
     try {
         const machineData = req.body;
-        
-        // --- Assemble Sensors Array ---
-        const sensors = [];
-        // When form fields have the same name, multer creates an array.
-        const sensorNames = Array.isArray(machineData.sensorName) ? machineData.sensorName : [machineData.sensorName];
-        const sensorUnits = Array.isArray(machineData.sensorUnit) ? machineData.sensorUnit : [machineData.sensorUnit];
+        const user = req.user;
 
-        if (sensorNames && sensorUnits && sensorNames.length === sensorUnits.length) {
-            for (let i = 0; i < sensorNames.length; i++) {
-                if (sensorNames[i]) { // Ensure sensor name is not empty
-                    sensors.push({
-                        sensorId: `sensor_${i + 1}`,
-                        name: sensorNames[i],
-                        type: sensorNames[i], // Using name as type for simplicity
-                        unit: sensorUnits[i]
-                    });
-                }
-            }
-        }
-        // --- End Assembly ---
-
-        // Validate required fields
-        const requiredFields = [
-            'machineName', 'machineType', 'model', 
-            'serialNumber', 'scadaSystem'
-        ];
-        
-        for (const field of requiredFields) {
-            if (!machineData[field]) {
-                return res.status(400).json({ 
-                    success: false, 
-                    message: `Missing required field: ${field}` 
-                });
-            }
-        }
-        
-        // Validate sensors
-        if (sensors.length === 0) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'At least one valid sensor must be provided.' 
-            });
-        }
-        
-        // Validate training data file
-        if (!req.file) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Training data file is required' 
-            });
-        }
-        
-        console.log('Processing SCADA machine addition:', machineData.machineName);
-        console.log('Training data file:', req.file.originalname);
-        
-        // Create new machine record
         const newMachine = new Machine({
-            userId: req.user._id,
-            // Machine Identification
-            machineName: machineData.machineName,
-            machineType: machineData.machineType,
-            manufacturer: machineData.manufacturer,
-            model: machineData.model,
-            serialNumber: machineData.serialNumber,
-            assetTag: machineData.assetTag,
-            
-            // SCADA Configuration
-            scadaSystem: machineData.scadaSystem,
-            scadaVersion: machineData.scadaVersion,
-            plcType: machineData.plcType,
-            communicationProtocol: machineData.communicationProtocol,
-            ipAddress: machineData.ipAddress,
-            port: machineData.port,
-
-            // Sensor Configuration
-            sensors: sensors, // Use the assembled sensors array
-            dataDescription: machineData.dataDescription,
-            trainingDataPath: req.file.path,
-            modelStatus: 'training'
+            ...machineData,
+            userId: user._id,
+            sensors: [],
+            modelStatus: 'untrained',
+            statusDetails: 'Machine added. Ready for data connection.'
         });
-        
-        // Save the new machine to get its ID
+
+        if (req.file) {
+            newMachine.training_data_path = req.file.path;
+            newMachine.training_columns = JSON.parse(machineData.columns || '[]');
+            newMachine.training_status = 'pending';
+        }
+
         await newMachine.save();
 
-        // Asynchronously start the model training process without waiting for it to finish.
-        // The Python script will update the DB on completion.
-        trainAnomalyDetectionModel(
-            newMachine._id,
-            req.user._id,
-            req.file.path,
-            sensors.map(s => s.name)
-        );
+        if (req.file) {
+            // Start training process in the background
+            trainModel(newMachine, user);
+        }
 
-        // Immediately respond to the client that the process has started.
         res.status(201).json({
             success: true,
-            message: 'Machine added and model training has started.',
-            data: newMachine
+            message: 'Machine added successfully. Training will start shortly if a file was provided.',
+            machine: newMachine
         });
 
     } catch (error) {
         console.error('Add machine error:', error);
-
-        // If a file was uploaded but an error occurred, clean it up.
-        // The training function also cleans up, but this is a fallback.
-        if (req.file && fs.existsSync(req.file.path)) {
-            fs.unlinkSync(req.file.path);
-        }
-        
-        res.status(500).json({
-            success: false,
-            message: `Failed to add machine: ${error.message}`
-        });
+        res.status(500).json({ success: false, message: `Server error: ${error.message}` });
     }
 });
 
-// Function to call the Python training script
-function trainAnomalyDetectionModel(machineId, userId, dataPath, sensorNames) {
-    return new Promise((resolve, reject) => {
-        const pythonScriptPath = path.join(__dirname, '..', 'models', 'anomaly.py');
-        const sensorNamesArg = sensorNames.join(',');
-        const pythonProcess = spawn('python3', [pythonScriptPath, 'train', userId.toString(), machineId.toString(), dataPath, sensorNamesArg]);
+async function trainModel(machine, user) {
+    const machineId = machine._id.toString();
+    const userId = user._id.toString();
+    const filePath = machine.training_data_path;
+    let columns = machine.training_columns;
 
-        let finalResult = null;
-        let lastError = '';
+    try {
+        await Machine.findByIdAndUpdate(machineId, { training_status: 'in_progress' });
+        
+        const timestampSynonyms = ['timestamp', 'timestamps', 'time_stamp', 'date'];
+        let timestampColumn = '';
+        const data = fs.readFileSync(filePath, 'utf8');
+        const lines = data.split(/\r?\n/);
+        const header = lines[0];
+        const fileColumns = header.split(/[,;]/).map(c => c.trim());
 
-        // Process stdout line by line
-        const handleOutput = async (data) => {
-            const output = data.toString();
-            // Split by newline in case multiple JSON objects are sent at once
-            const lines = output.split(/\\r?\\n/).filter(line => line.trim() !== '');
 
-            for (const line of lines) {
-                try {
-                    const result = JSON.parse(line);
-                    if (result.type === 'progress') {
-                        // This is a progress update
-                        await Machine.findByIdAndUpdate(machineId, {
-                            trainingProgress: result.progress,
-                            statusDetails: result.message
-                        });
-                    } else if (result.success) {
-                        // This is the final success message
-                        finalResult = result;
-                    } else {
-                        // This is a final failure message from the script
-                        lastError = result.error || 'Unknown training error.';
-                    }
-                } catch (e) {
-                    // Not a JSON line, just a regular log.
-                    console.log(`[Training Log for ${machineId}]: ${line}`);
-                }
+        for (const col of fileColumns) {
+            if(timestampSynonyms.includes(col.toLowerCase())) {
+                timestampColumn = col;
+                break;
             }
-        };
+        }
+        
+        if (timestampColumn && timestampColumn !== 'time_stamp') {
+            lines[0] = header.replace(timestampColumn, 'time_stamp');
+            const updatedData = lines.join('\n');
+            fs.writeFileSync(filePath, updatedData);
+        } else if (!timestampColumn) {
+            throw new Error('No timestamp column found in the CSV file. Please use one of: ' + timestampSynonyms.join(', '));
+        }
 
-        pythonProcess.stdout.on('data', handleOutput);
+        const idSynonyms = ['id', 'machine_id'];
+        columns = columns.filter(c => !timestampSynonyms.includes(c.toLowerCase()) && !idSynonyms.includes(c.toLowerCase()));
+        
+        const pythonProcess = spawn('python3', [
+            path.join(__dirname, '../models/anomaly.py'),
+            'train',
+            userId,
+            machineId,
+            filePath,
+            columns.join(',')
+        ]);
+
+        let lastJsonOutput = '';
+        pythonProcess.stdout.on('data', (data) => {
+            const output = data.toString();
+            console.log(`[TRAIN-LOG ${machineId}]: ${output}`);
+            const jsonStrings = output.trim().split('\n');
+            lastJsonOutput = jsonStrings[jsonStrings.length - 1];
+        });
+
         pythonProcess.stderr.on('data', (data) => {
-            const errorMsg = data.toString();
-            console.error(`[Training Error for ${machineId}]: ${errorMsg}`);
-            lastError += errorMsg;
+            console.error(`[TRAIN-ERR ${machineId}]: ${data.toString()}`);
         });
 
         pythonProcess.on('close', async (code) => {
-            console.log(`Training process for machine ${machineId} exited with code ${code}`);
-            
-            // Clean up the uploaded file
-            if (fs.existsSync(dataPath)) {
-                fs.unlinkSync(dataPath, (err) => {
-                    if(err) console.error(`Error deleting training file ${dataPath}:`, err)
-                });
-            }
-
-            if (code === 0 && finalResult && finalResult.success) {
-                // Success
-                await Machine.findByIdAndUpdate(machineId, { 
-                    modelStatus: 'trained',
-                    trainingProgress: 100,
-                    lastUpdated: Date.now(),
-                    lastTrained: Date.now(),
-                    operationalStatus: 'active',
-                    statusDetails: 'Model trained successfully.',
-                    trainingMetrics: finalResult.metrics || {}
-                });
-                resolve({ success: true, message: 'Model trained successfully.' });
-            } else {
-                // Failure
-                const failureReason = `Training failed. Exit code: ${code}. Error: ${lastError}`;
-                await Machine.findByIdAndUpdate(machineId, { 
-                    modelStatus: 'failed',
-                    operationalStatus: 'error',
-                    trainingProgress: 0, // Reset progress on failure
-                    statusDetails: failureReason
-                });
-                reject(new Error(failureReason));
+            console.log(`[TRAIN-CLOSE ${machineId}]: child process exited with code ${code}`);
+            try {
+                const result = JSON.parse(lastJsonOutput);
+                if (code === 0 && result.success) {
+                    const paths = getModelPaths(userId, machineId);
+                    const thresholdData = fs.readFileSync(paths.threshold_file, 'utf8');
+                    await Machine.findByIdAndUpdate(machineId, {
+                        training_status: 'completed',
+                        model_params: JSON.parse(thresholdData),
+                        modelStatus: 'trained'
+                    });
+                    console.log(`Training completed successfully for machine ${machineId}`);
+                } else {
+                    throw new Error(result.error || 'Unknown training error');
+                }
+            } catch (e) {
+                await Machine.findByIdAndUpdate(machineId, { training_status: 'failed' });
+                console.error(`Failed to update machine status after training for ${machineId}: ${e.message}`);
             }
         });
 
-        pythonProcess.on('error', (err) => {
-            // This is for errors spawning the process itself
-            console.error('Failed to start training process:', err);
-            if (fs.existsSync(dataPath)) {
-                fs.unlinkSync(dataPath);
-            }
-            reject(new Error('Failed to start training process.'));
-        });
-    });
+    } catch (error) {
+        console.error(`Error during training setup for machine ${machineId}:`, error);
+        await Machine.findByIdAndUpdate(machineId, { training_status: 'failed' });
+    }
 }
 
-// @route   GET /api/dashboard/machine/:id/training-status
-// @desc    Get the model training status for a specific machine
+function getModelPaths(userId, machineId) {
+    const machineDir = path.join(__dirname, '../models/user_models', `user_${userId}`, `machine_${machineId}`);
+    return {
+        model_file: path.join(machineDir, 'model.h5'),
+        scaler_file: path.join(machineDir, 'scaler.pkl'),
+        columns_file: path.join(machineDir, 'columns.json'),
+        threshold_file: path.join(machineDir, 'threshold.json'),
+    };
+}
+
+// @route   GET /api/dashboard/machine/:machineId/status
+// @desc    Get training status for a specific machine
 // @access  Private
-router.get('/machine/:id/training-status', auth, async (req, res) => {
+router.get('/machine/:machineId/status', auth, async (req, res) => {
     try {
-        const machine = await Machine.findById(req.params.id);
+        const { machineId } = req.params;
+        const machine = await Machine.findOne({ _id: machineId, userId: req.user._id });
 
         if (!machine) {
             return res.status(404).json({ success: false, message: 'Machine not found' });
         }
 
-        // Ensure the machine belongs to the user
-        if (machine.userId.toString() !== req.user._id.toString()) {
-            return res.status(403).json({ success: false, message: 'User not authorized for this machine' });
-        }
-
         res.json({
             success: true,
-            data: {
-                machineId: machine._id,
-                machineName: machine.machineName,
-                modelStatus: machine.modelStatus,
-                statusDetails: machine.statusDetails,
-                trainingProgress: machine.trainingProgress,
-                lastUpdated: machine.lastUpdated
-            }
+            status: machine.training_status,
+            modelStatus: machine.modelStatus
         });
 
     } catch (error) {
-        console.error('Get training status error:', error);
+        console.error(`Error fetching status for machine ${req.params.machineId}:`, error);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });
@@ -704,7 +599,7 @@ router.delete('/machine/:id', auth, async (req, res) => {
 });
 
 // This endpoint receives a CSV, reads the header row, and returns the column names.
-router.post('/get-csv-headers', upload.single('trainingData'), (req, res) => {
+router.post('/get-csv-headers', (req, res) => {
     if (!req.file) {
         return res.status(400).json({ success: false, message: 'No file uploaded.' });
     }
@@ -735,14 +630,23 @@ router.post('/get-csv-headers', upload.single('trainingData'), (req, res) => {
             const commaCount = (firstLine.match(/,/g) || []).length;
             const semicolonCount = (firstLine.match(/;/g) || []).length;
             const delimiter = commaCount > semicolonCount ? ',' : ';';
-            let headers = firstLine.split(delimiter);
             
-            headers = headers.map(h => h.trim()).filter(h => h && h.toLowerCase() !== 'time_stamp' && h.toLowerCase() !== 'timestamp');
+            // Define a list of common non-sensor column name fragments to exclude
+            const excludedKeywords = ['id', 'time', 'date', 'asset', 'serial', 'unnamed', 'index'];
+            
+            let headers = firstLine.split(delimiter)
+                .map(h => h.trim().replace(/"/g, '')) // Remove quotes and trim whitespace
+                .filter(h => h); // Filter out any empty headers
 
-            if (headers.length === 0) {
-                cleanupAndRespond(400, { success: false, message: 'Could not find any valid header columns in the uploaded file.' });
+            // Filter out headers that match the excluded keywords
+            const filteredHeaders = headers.filter(header => 
+                !excludedKeywords.some(keyword => header.toLowerCase().includes(keyword))
+            );
+
+            if (filteredHeaders.length === 0) {
+                cleanupAndRespond(400, { success: false, message: 'Could not find any valid sensor columns in the uploaded file.' });
             } else {
-                cleanupAndRespond(200, { success: true, headers: headers });
+                cleanupAndRespond(200, { success: true, headers: filteredHeaders });
             }
         } catch (error) {
             console.error('Error processing header line:', error);

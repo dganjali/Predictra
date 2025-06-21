@@ -231,287 +231,218 @@ function initAddMachineModal() {
     const cancelBtn = document.getElementById('cancelAddMachine');
     const closeModalBtn = document.getElementById('closeModal');
     
-    const goToStep2Btn = document.getElementById('goToStep2');
-    const backToStep1Btn = document.getElementById('backToStep1');
-    const goToStep3Btn = document.getElementById('goToStep3');
-    const backToStep2Btn = document.getElementById('backToStep2');
+    const nextBtn = document.getElementById('nextBtn');
+    const prevBtn = document.getElementById('prevBtn');
+    const submitBtn = document.getElementById('submitBtn');
+    const steps = [...document.querySelectorAll('.form-step')];
+    const indicators = [...document.querySelectorAll('.step-indicator')];
+    let currentStep = 0;
+
+    const openModal = () => {
+        currentStep = 0;
+        updateFormSteps();
+        modal.classList.add('show');
+    };
     
-    const openModal = () => modal.classList.add('show');
     const closeModal = () => {
         modal.classList.remove('show');
-        resetAddMachineModal();
+        form.reset();
+        // Reset steps to initial state
+        currentStep = 0;
+        updateFormSteps();
+        // Clear dynamic content
+        document.getElementById('columnCheckboxes').innerHTML = '';
+        document.getElementById('sensorConfigContainer').innerHTML = '';
     };
 
     document.getElementById('addMachineBtn').addEventListener('click', openModal);
-    document.getElementById('addFirstMachineBtn')?.addEventListener('click', openModal);
-    cancelBtn.addEventListener('click', closeModal);
+    
+    const addFirstMachineBtn = document.getElementById('addFirstMachineBtn');
+    if (addFirstMachineBtn) {
+        addFirstMachineBtn.addEventListener('click', openModal);
+    }
     closeModalBtn.addEventListener('click', closeModal);
 
-    // Step navigation
-    goToStep2Btn.addEventListener('click', handleGoToStep2);
-    backToStep1Btn.addEventListener('click', () => navigateSteps(1));
-    goToStep3Btn.addEventListener('click', handleGoToStep3);
-    backToStep2Btn.addEventListener('click', () => navigateSteps(2));
-
-    form.addEventListener('submit', handleAddMachine);
-}
-
-function navigateSteps(stepNumber) {
-    document.querySelectorAll('.form-step').forEach(step => {
-        step.style.display = 'none';
-    });
-    document.querySelector(`.form-step[data-step="${stepNumber}"]`).style.display = 'block';
-
-    document.querySelectorAll('.modal-stepper .step').forEach(step => {
-        step.classList.remove('active');
-    });
-    document.querySelector(`.modal-stepper .step[data-step="${stepNumber}"]`).classList.add('active');
-}
-
-async function handleGoToStep2() {
-    const fileInput = document.getElementById('trainingData');
-    machineConfig.file = fileInput.files[0];
-    
-    if (!document.getElementById('machineName').value || !document.getElementById('machineType').value) {
-        showMessage('Please fill out the machine name and type.', 'error');
-        return;
-    }
-
-    if (!machineConfig.file) {
-        showMessage('Please select a training data file.', 'error');
-        return;
-    }
-
-    navigateSteps(2);
-    const headersContainer = document.getElementById('csvHeadersContainer');
-    const spinner = headersContainer.querySelector('.spinner-container');
-    const progressContainer = document.getElementById('csvLoadProgressContainer');
-    const progressBar = document.getElementById('csvLoadProgressBar');
-    const progressText = document.getElementById('csvLoadProgressText');
-    
-    if(spinner) spinner.style.display = 'none'; // Hide spinner if it exists
-    progressContainer.style.display = 'block';
-
-    try {
-        const formData = new FormData();
-        formData.append('trainingData', machineConfig.file);
-
-        const response = await fetchWithProgress('/api/dashboard/get-csv-headers', {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-            body: formData
-        }, progressBar, progressText);
-
-        const result = await response.json();
-        progressContainer.style.display = 'none';
-
-        if (!response.ok || !result.success) {
-            // Use the specific error message from the backend if available
-            const errorMessage = result.message || `An error occurred: ${response.statusText}`;
-            throw new Error(errorMessage);
-        }
-
-        const headers = result.headers;
-        machineConfig.headers = headers;
-        displayCsvHeaders(headers);
-    } catch (error) {
-        console.error('Error in step 1:', error);
-        alert(`Failed to process CSV file: ${error.message}`);
-        resetAddMachineModal(); // Revert to step 1 on failure
-    }
-}
-
-function displayCsvHeaders(headers) {
-    const container = document.getElementById('csvHeadersContainer');
-    // Clear everything, including a potential spinner
-    container.innerHTML = headers.map(header => `
-        <div class="sensor-checkbox-item">
-            <input type="checkbox" id="sensor-header-${header}" name="selectedSensors" value="${header}">
-            <label for="sensor-header-${header}">${header}</label>
-        </div>
-    `).join('');
-}
-
-function handleGoToStep3() {
-    const selected = Array.from(document.querySelectorAll('#csvHeadersContainer input[type="checkbox"]:checked'))
-                          .map(cb => cb.value);
-
-    if (selected.length === 0) {
-        showMessage('Please select at least one sensor column.', 'error');
-        return;
-    }
-    
-    machineConfig.selectedSensors = selected;
-    displaySensorConfiguration(selected);
-    navigateSteps(3);
-}
-
-function displaySensorConfiguration(sensors) {
-    const container = document.getElementById('sensorConfigContainer');
-    container.innerHTML = sensors.map((sensor, index) => `
-        <div class="sensor-row">
-            <div class="form-group">
-                <label>CSV Column</label>
-                <input type="text" value="${sensor}" disabled>
-                <input type="hidden" name="sensorName" value="${sensor}">
-            </div>
-            <div class="form-group">
-                <label for="sensorDisplayName${index}">Display Name</label>
-                <input type="text" id="sensorDisplayName${index}" name="sensorDisplayName" value="${sensor}" placeholder="e.g., Main Pump Temperature" required>
-            </div>
-            <div class="form-group">
-                <label for="sensorUnit${index}">Unit</label>
-                <input type="text" id="sensorUnit${index}" name="sensorUnit" placeholder="e.g., Celsius, PSI" required>
-            </div>
-        </div>
-    `).join('');
-}
-
-function resetAddMachineModal() {
-    document.getElementById('addMachineForm').reset();
-    machineConfig = { file: null, headers: [], selectedSensors: [] };
-    document.getElementById('csvHeadersContainer').innerHTML = '<div class="spinner-container" style="display: none;"><div class="spinner"></div><p>Loading CSV columns...</p></div>';
-    document.getElementById('sensorConfigContainer').innerHTML = '';
-    navigateSteps(1);
-}
-
-function showFormError(fieldId, message) {
-    const field = document.getElementById(fieldId);
-    if (!field) return;
-    const formGroup = field.closest('.form-group');
-    if (!formGroup) return;
-    
-    formGroup.classList.add('error');
-    
-    let errorElement = formGroup.querySelector('.form-error');
-    if (!errorElement) {
-        errorElement = document.createElement('div');
-        errorElement.className = 'form-error';
-        formGroup.appendChild(errorElement);
-    }
-    errorElement.textContent = message;
-}
-
-function clearFormErrors() {
-    document.querySelectorAll('#addMachineForm .form-group.error').forEach(group => {
-        group.classList.remove('error');
-        const errorElement = group.querySelector('.form-error');
-        if (errorElement) errorElement.textContent = '';
-    });
-}
-
-function validateForm() {
-    // Basic validation is now handled per step.
-    return true;
-}
-
-async function handleAddMachine(e) {
-    e.preventDefault();
-    
-    const form = document.getElementById('addMachineForm');
-    const submitBtn = form.querySelector('button[type="submit"]');
-
-    // --- Form Validation ---
-    const requiredFields = ['machineName', 'machineType', 'model', 'serialNumber', 'scadaSystem'];
-    let isValid = true;
-    
-    requiredFields.forEach(fieldId => {
-        const input = document.getElementById(fieldId);
-        if (!input.value) {
-            // Since some fields are in step 1, we need a generic message.
-            isValid = false;
+    nextBtn.addEventListener('click', () => {
+        if (validateStep(currentStep)) {
+            currentStep++;
+            if (currentStep === 2) { // Moving to step 3
+                generateSensorConfigUI();
+            }
+            updateFormSteps();
         }
     });
 
-    if (!isValid) {
-        showMessage('Please ensure all required fields in Step 1 and Step 3 are filled out, including Model, Serial Number, and SCADA System.', 'error');
-        // Optionally, navigate back to the first step with errors.
-        navigateSteps(1); 
-        return;
-    }
-    // --- End Validation ---
+    prevBtn.addEventListener('click', () => {
+        currentStep--;
+        updateFormSteps();
+    });
 
-    submitBtn.classList.add('loading');
-    submitBtn.disabled = true;
-
-    try {
-        const formData = new FormData(form);
-
-        // Delete any existing 'trainingData' field to prevent duplicates.
-        // This ensures we use the file validated in step 2.
-        formData.delete('trainingData');
-
-        // Append the stored file object to the form data
-        if (machineConfig.file) {
-            formData.append('trainingData', machineConfig.file, machineConfig.file.name);
-        }
-
-        // The 'selectedSensors' are not needed here because their values
-        // ('sensorName', 'sensorUnit') are already in the form from step 3.
-
-        const response = await fetch('/api/dashboard/add-machine', {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-            body: formData
+    function updateFormSteps() {
+        steps.forEach((step, index) => {
+            step.style.display = index === currentStep ? 'block' : 'none';
+        });
+        indicators.forEach((indicator, index) => {
+            indicator.classList.toggle('active', index === currentStep);
         });
 
-        const result = await response.json();
-
-        if (response.ok && result.success) {
-            showMessage('Machine added successfully! Model training has started.', 'success');
-            document.getElementById('addMachineModal').classList.remove('show');
-            resetAddMachineModal(); // Use the new, more comprehensive reset function
-            setTimeout(loadDashboardData, 500); // Refresh list to show 'training' status
-        } else {
-            showMessage(result.message || 'Failed to add machine.', 'error');
-        }
-    } catch (error) {
-        console.error('Add machine error:', error);
-        showMessage(error.message || 'An unexpected error occurred.', 'error');
-    } finally {
-        // No more progress bar here, just re-enable the button
-        submitBtn.classList.remove('loading');
-        submitBtn.disabled = false;
+        prevBtn.style.display = currentStep > 0 ? 'inline-block' : 'none';
+        nextBtn.style.display = currentStep < steps.length - 1 ? 'inline-block' : 'none';
+        submitBtn.style.display = currentStep === steps.length - 1 ? 'inline-block' : 'none';
     }
-}
 
-/**
- * A wrapper for the fetch API that provides upload progress.
- * @param {string} url The URL to fetch.
- * @param {object} opts The options to pass to the fetch request.
- * @param {HTMLElement} progressBar The progress bar element.
- * @param {HTMLElement} progressText The progress text element.
- * @returns {Promise<Response>} A promise that resolves with the fetch Response.
- */
-function fetchWithProgress(url, opts = {}, progressBar, progressText) {
-    return new Promise((res, rej) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open(opts.method || 'get', url);
+    function validateStep(stepIndex) {
+        const step = steps[stepIndex];
+        const inputs = [...step.querySelectorAll('input[required], select[required]')];
+        let isValid = true;
+        for (const input of inputs) {
+            if (!input.value.trim()) {
+                input.classList.add('is-invalid');
+                isValid = false;
+            } else {
+                input.classList.remove('is-invalid');
+            }
+        }
+        if (!isValid) {
+            showMessage('Please fill out all required fields.', 'error');
+        }
+        return isValid;
+    }
+    
+    function generateSensorConfigUI() {
+        const selectedColumns = [...document.querySelectorAll('input[name="columns"]:checked')].map(cb => cb.value);
+        const sensorConfigContainer = document.getElementById('sensorConfigContainer');
+        sensorConfigContainer.innerHTML = '';
 
-        for (const k in opts.headers || {}) {
-            xhr.setRequestHeader(k, opts.headers[k]);
+        // Exclude id/timestamp from config UI
+        const idTsSynonyms = ['id', 'timestamp', 'timestamps', 'time_stamp'];
+        const sensorsToConfigure = selectedColumns.filter(c => !idTsSynonyms.includes(c.toLowerCase()));
+
+        sensorsToConfigure.forEach(column => {
+            const item = document.createElement('div');
+            item.classList.add('sensor-config-item');
+            item.innerHTML = `
+                <label>${column}</label>
+                <div class="form-group">
+                    <input type="text" name="sensor_display_${column}" placeholder="Display Name" required class="form-control" value="${column}">
+                </div>
+                <div class="form-group">
+                    <input type="text" name="sensor_unit_${column}" placeholder="Unit (e.g., °C, kPa)" required class="form-control">
+                </div>
+            `;
+            sensorConfigContainer.appendChild(item);
+        });
+    }
+
+    const csvFileInput = document.getElementById('csvFile');
+    const columnCheckboxesContainer = document.getElementById('columnCheckboxes');
+
+    csvFileInput.addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (!file) {
+            return;
         }
-        
-        xhr.onload = e => res(new Response(e.target.response, {
-            status: e.target.status,
-            statusText: e.target.statusText,
-            headers: { 'Content-Type': e.target.getResponseHeader('Content-Type') }
-        }));
-        
-        xhr.onerror = rej;
-        
-        if (xhr.upload && progressBar) {
-            xhr.upload.onprogress = (e) => {
-                if (e.lengthComputable) {
-                    const percentComplete = Math.round((e.loaded / e.total) * 100);
-                    progressBar.style.width = percentComplete + '%';
-                    if(progressText) progressText.textContent = percentComplete + '%';
-                }
-            };
-        }
-        
-        xhr.send(opts.body);
+
+        Papa.parse(file, {
+            header: true,
+            skipEmptyLines: true,
+            preview: 1,
+            complete: (results) => {
+                const headers = results.meta.fields;
+                columnCheckboxesContainer.innerHTML = ''; 
+
+                headers.forEach(header => {
+                    const isRequired = header.toLowerCase() === 'id' || header.toLowerCase() === 'timestamp' || header.toLowerCase() === 'timestamps';
+                    
+                    const checkboxDiv = document.createElement('div');
+                    checkboxDiv.classList.add('checkbox-item');
+
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.id = `col-${header}`;
+                    checkbox.name = 'columns';
+                    checkbox.value = header;
+                    checkbox.checked = isRequired;
+                    checkbox.disabled = isRequired;
+
+                    const label = document.createElement('label');
+                    label.htmlFor = `col-${header}`;
+                    label.textContent = header;
+
+                    checkboxDiv.appendChild(checkbox);
+                    checkboxDiv.appendChild(label);
+                    columnCheckboxesContainer.appendChild(checkboxDiv);
+                });
+            },
+            error: (error) => {
+                console.error('Error parsing CSV:', error);
+                alert('Error parsing CSV file. Please check the file format.');
+            }
+        });
     });
+
+    form.addEventListener('submit', handleAddMachine);
+
+    async function handleAddMachine(e) {
+        e.preventDefault();
+        
+        if (!validateStep(2)) return; // Validate final step before submitting
+
+        const form = e.target;
+        const formData = new FormData(form);
+        const token = localStorage.getItem('token');
+        
+        // Collect sensor configuration
+        const sensors = [];
+        const selectedColumns = [...document.querySelectorAll('input[name="columns"]:checked')].map(cb => cb.value);
+        const idTsSynonyms = ['id', 'timestamp', 'timestamps', 'time_stamp'];
+        const sensorsToConfigure = selectedColumns.filter(c => !idTsSynonyms.includes(c.toLowerCase()));
+        
+        sensorsToConfigure.forEach(column => {
+            sensors.push({
+                sensorId: column,
+                name: formData.get(`sensor_display_${column}`),
+                unit: formData.get(`sensor_unit_${column}`)
+            });
+        });
+
+        formData.append('sensors', JSON.stringify(sensors));
+        
+        const submitButton = form.querySelector('#submitBtn');
+        submitButton.disabled = true;
+        submitButton.textContent = 'Processing...';
+        
+        try {
+            const response = await fetch('/api/dashboard/machines', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` },
+                body: formData,
+            });
+
+            const data = await response.json();
+
+            if (!data.success) {
+                showMessage(data.message, 'error');
+                return;
+            }
+
+            showMessage('Machine added and training started!', 'success');
+            
+            document.getElementById('addMachineModal').classList.remove('show');
+            form.reset();
+            // Manually trigger close logic to reset steps
+            closeModal();
+
+            loadDashboardData();
+
+        } catch (error) {
+            console.error('Error adding machine:', error);
+            showMessage('Error adding machine. Please try again.', 'error');
+        } finally {
+            submitButton.disabled = false;
+            submitButton.textContent = 'Add Machine & Train';
+        }
+    }
 }
 
 function showMessage(message, type = 'info') {
@@ -537,20 +468,27 @@ function showMessage(message, type = 'info') {
 
 async function loadDashboardData() {
     try {
+        const token = localStorage.getItem('token');
         const response = await fetch('/api/dashboard/data', {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            headers: { 'Authorization': `Bearer ${token}` }
         });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            allMachines = result.data.machines;
-            displayDashboardData(result.data);
+        const data = await response.json();
+
+        if (data.success) {
+            allMachines = data.data.machines || [];
+            displayDashboardData(data.data);
+            // After displaying, check for any machines that are in training
+            allMachines.forEach(machine => {
+                if (machine.training_status === 'pending' || machine.training_status === 'in_progress') {
+                    startTrainingStatusPolling(machine._id);
+                }
+            });
         } else {
-            console.error('Failed to load dashboard data:', result.message);
+            showMessage(data.message, 'error');
         }
     } catch (error) {
         console.error('Error loading dashboard data:', error);
+        showMessage('Failed to load dashboard data. Please try again.', 'error');
     }
 }
 
@@ -595,69 +533,68 @@ function displayMachines(machines) {
 
     if (!machines || machines.length === 0) {
         machineList.innerHTML = `
-            <div class="no-machines">
-                <i class="fas fa-server"></i>
+            <div class="no-machines" style="display: flex; flex-direction: column; align-items: center; padding: 2rem;">
+                <i class="fas fa-server" style="font-size: 3rem; color: #ccc; margin-bottom: 1rem;"></i>
                 <h3>No Machines Found</h3>
                 <p>Get started by adding your first piece of equipment to monitor.</p>
-                <button class="btn btn-primary" id="addFirstMachineBtn">
+                <button class="btn btn-primary" id="addFirstMachineBtn" style="margin-top: 1rem;">
                     <i class="fas fa-plus"></i> Add Machine
                 </button>
             </div>
         `;
+        // Re-attach event listener since we overwrote the HTML
         document.getElementById('addFirstMachineBtn').addEventListener('click', () => {
             const modal = document.getElementById('addMachineModal');
             if (modal) modal.classList.add('show');
         });
         return;
     }
-    
-    machineList.innerHTML = machines.map(machine => {
-        const statusColor = getStatusColor(machine.status);
-        const healthScore = machine.healthScore !== null && machine.healthScore !== undefined ? machine.healthScore.toFixed(1) : 'N/A';
-        const rulEstimate = machine.rulEstimate !== null && machine.rulEstimate !== undefined ? machine.rulEstimate : 'N/A';
-        const lastUpdated = machine.lastUpdated ? new Date(machine.lastUpdated).toLocaleString() : 'Never';
-        const modelStatus = machine.modelStatus || 'untrained';
 
-        let statusContent;
-        if (modelStatus === 'training') {
-            const progress = machine.trainingProgress || 0;
-            const details = machine.statusDetails || 'Initializing...';
-            statusContent = `
-                <div class="status-training-container">
-                    <div class="status-line">
-                        <span class="status-badge status-training"><i class="fas fa-sync-alt fa-spin"></i> Training...</span>
-                        <span class="progress-percentage">${progress}%</span>
-                    </div>
-                    <div class="progress-bar-container">
-                        <div class="progress-bar" style="width: ${progress}%;"></div>
-                    </div>
-                    <div class="status-details-text">${details}</div>
-                </div>
-            `;
-        } else if (modelStatus === 'failed') {
-            statusContent = `<span class="status-badge status-failed" title="${machine.statusDetails || 'Training failed'}"><i class="fas fa-exclamation-triangle"></i> Failed</span>`;
-        } else {
-            statusContent = `<span class="status-badge" style="background-color: ${statusColor};">${machine.status}</span>`;
-        }
+    const machineCardsHTML = machines.map(machine => {
+        const {
+            _id, machineName, machineType, status, healthScore,
+            rulEstimate, lastUpdated, training_status, modelStatus
+        } = machine;
+
+        const statusColor = getStatusColor(status);
+        const lastUpdatedFormatted = lastUpdated ? new Date(lastUpdated).toLocaleString() : 'N/A';
+        const isTrained = modelStatus === 'trained';
         
+        let statusContent;
+        if (training_status === 'in_progress' || training_status === 'pending') {
+             statusContent = `
+                 <div class="status-training-container">
+                     <div class="status-line">
+                         <span class="status-badge status-training"><i class="fas fa-sync-alt fa-spin"></i> Training...</span>
+                     </div>
+                     <div class="status-details-text">${training_status === 'pending' ? 'Pending in queue' : 'Processing data...'}</div>
+                 </div>
+             `;
+        } else if (training_status === 'failed') {
+            statusContent = `<span class="status-badge status-failed" title="Training failed"><i class="fas fa-exclamation-triangle"></i> Failed</span>`;
+        } else {
+            statusContent = `<span class="status-badge" style="background-color: ${statusColor};">${status}</span>`;
+        }
+
+
         return `
-            <div class="machine-card" id="machine-${machine.id}" data-model-status="${modelStatus}">
+            <div class="machine-card" id="machine-${_id}" data-model-status="${modelStatus}">
                 <div class="card-header">
                     <div class="machine-title">
                         <i class="fas fa-cogs machine-icon"></i>
-                        <h3>${machine.name}</h3>
+                        <h3>${machineName}</h3>
                     </div>
                     <div class="machine-actions">
                         ${statusContent}
                         <div class="dropdown">
-                            <button class="dropdown-toggle" ${modelStatus === 'training' ? 'disabled' : ''}><i class="fas fa-ellipsis-v"></i></button>
+                            <button class="dropdown-toggle" ${training_status === 'in_progress' ? 'disabled' : ''}><i class="fas fa-ellipsis-v"></i></button>
                             <div class="dropdown-menu">
-                                <button class="dropdown-item" data-action="view-details" data-id="${machine.id}"><i class="fas fa-eye"></i> View Details</button>
-                                <button class="dropdown-item" data-action="calculate-risk" data-id="${machine.id}" ${modelStatus !== 'trained' ? 'disabled' : ''}>
+                                <button class="dropdown-item" data-action="view-details" data-id="${_id}"><i class="fas fa-eye"></i> View Details</button>
+                                <button class="dropdown-item" data-action="calculate-risk" data-id="${_id}" ${!isTrained ? 'disabled' : ''}>
                                     <i class="fas fa-calculator"></i> Calculate Risk
                                 </button>
                                 <div class="dropdown-divider"></div>
-                                <button class="dropdown-item danger" data-action="remove-machine" data-id="${machine.id}"><i class="fas fa-trash-alt"></i> Remove Machine</button>
+                                <button class="dropdown-item danger" data-action="remove-machine" data-id="${_id}"><i class="fas fa-trash-alt"></i> Remove Machine</button>
                             </div>
                         </div>
                     </div>
@@ -666,34 +603,33 @@ function displayMachines(machines) {
                     <div class="metric">
                         <i class="fas fa-shield-alt"></i>
                         <div class="metric-info">
-                            <span class="metric-value">${healthScore}</span>
+                            <span class="metric-value">${healthScore || 'N/A'}</span>
                             <span class="metric-label">Health Score</span>
                         </div>
                     </div>
                     <div class="metric">
                         <i class="fas fa-calendar-alt"></i>
                         <div class="metric-info">
-                            <span class="metric-value">${rulEstimate}</span>
+                            <span class="metric-value">${rulEstimate || 'N/A'}</span>
                             <span class="metric-label">RUL (days)</span>
                         </div>
                     </div>
                 </div>
                 <div class="card-footer">
-                    <p><strong>Type:</strong> ${machine.type}</p>
-                    <p><strong>Last Updated:</strong> ${lastUpdated}</p>
+                    <p><strong>Type:</strong> ${machineType}</p>
+                    <p><strong>Last Updated:</strong> ${lastUpdatedFormatted}</p>
                 </div>
             </div>
         `;
     }).join('');
 
-    // Start polling for any machines that are currently training
-    startTrainingStatusPolling();
-
+    machineList.innerHTML = machineCardsHTML;
+    
     // Add event listeners for new dropdowns
     document.querySelectorAll('.machine-card .dropdown-toggle').forEach(toggle => {
         toggle.addEventListener('click', (e) => {
             e.stopPropagation();
-            const dropdown = toggle.parentElement;
+            const dropdown = toggle.closest('.dropdown');
             // Close other dropdowns
             document.querySelectorAll('.dropdown.show').forEach(d => {
                 if (d !== dropdown) d.classList.remove('show');
@@ -712,9 +648,27 @@ window.addEventListener('click', (e) => {
     }
 });
 
+function getTrainingStatusHTML(status) {
+    if (!status || status === 'none') return '';
+
+    const statusMap = {
+        'pending': { text: 'Pending Training', icon: 'fa-clock', color: '#17a2b8' },
+        'in_progress': { text: 'Model Training...', icon: 'fa-sync fa-spin', color: '#ffc107' },
+        'completed': { text: 'Model Trained', icon: 'fa-check-circle', color: '#28a745' },
+        'failed': { text: 'Training Failed', icon: 'fa-times-circle', color: '#dc3545' }
+    };
+
+    const info = statusMap[status];
+    if (!info) return '';
+    
+    return `<div class="training-status" style="color: ${info.color}; margin-top: 10px; font-weight: bold;">
+                <i class="fas ${info.icon}"></i> ${info.text}
+            </div>`;
+}
+
 let activePollers = {};
 
-function startTrainingStatusPolling() {
+function startTrainingStatusPolling(machineId) {
     // Stop any pollers that are running for machines that are no longer training
     Object.keys(activePollers).forEach(machineId => {
         const machineCard = document.getElementById(`machine-${machineId}`);
@@ -828,41 +782,11 @@ function viewMachineDetails(machineId) {
     modalBody.innerHTML = `
         <div class="details-grid">
             <div class="details-section">
-                <h3><i class="fas fa-cogs"></i> Identification</h3>
-                ${createDetail('Machine Type', machine.type)}
-                ${createDetail('Manufacturer', machine.manufacturer)}
-                ${createDetail('Model', machine.model)}
-                ${createDetail('Serial Number', machine.serialNumber)}
-                ${createDetail('Asset Tag', machine.assetTag)}
-            </div>
-            <div class="details-section">
-                <h3><i class="fas fa-network-wired"></i> SCADA & PLC</h3>
-                ${createDetail('SCADA System', machine.scadaSystem)}
-                ${createDetail('SCADA Version', machine.scadaVersion)}
-                ${createDetail('PLC Type', machine.plcType)}
-                ${createDetail('Protocol', machine.communicationProtocol)}
-                ${createDetail('IP Address', machine.ipAddress)}
-                ${createDetail('Port', machine.port)}
-            </div>
-            <div class="details-section">
-                <h3><i class="fas fa-info-circle"></i> Status & Health</h3>
-                ${createDetail('Status', machine.status)}
-                ${createDetail('Health Score', machine.healthScore + '%')}
-                ${createDetail('RUL Estimate', machine.rulEstimate + ' days')}
+                <h3><i class="fas fa-tachometer-alt"></i> Status & Metrics</h3>
+                ${createDetail('Status', `<span class="status-badge" style="background-color: ${getStatusColor(machine.status)};">${machine.status}</span>`)}
+                ${createDetail('Health Score', machine.healthScore)}
+                ${createDetail('Est. RUL (days)', machine.rulEstimate)}
                 ${createDetail('Last Updated', new Date(machine.lastUpdated).toLocaleString())}
-            </div>
-            <div class="details-section">
-                <h3><i class="fas fa-tools"></i> Maintenance</h3>
-                ${createDetail('Location', machine.location)}
-                ${createDetail('Department', machine.department)}
-                ${createDetail('Installation Date', machine.installationDate ? new Date(machine.installationDate).toLocaleDateString() : 'N/A')}
-                ${createDetail('Last Maintenance', machine.lastMaintenance ? new Date(machine.lastMaintenance).toLocaleDateString() : 'N/A')}
-            </div>
-             <div class="details-section">
-                <h3><i class="fas fa-brain"></i> AI Model</h3>
-                ${createDetail('Model Status', machine.modelStatus)}
-                ${createDetail('Last Trained', machine.lastTrained ? new Date(machine.lastTrained).toLocaleString() : 'N/A')}
-                ${createDetail('Status Details', machine.statusDetails)}
             </div>
         </div>
     `;

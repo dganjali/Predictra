@@ -18,6 +18,8 @@ app.use(
     directives: {
       ...helmet.contentSecurityPolicy.getDefaultDirectives(),
       "script-src": ["'self'", "https://cdnjs.cloudflare.com"],
+      "style-src": ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
+      "font-src": ["'self'", "https://cdnjs.cloudflare.com"],
     },
   })
 );

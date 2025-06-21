@@ -136,34 +136,21 @@ const machineSchema = new mongoose.Schema({
     trim: true,
     maxlength: [500, 'Data description cannot exceed 500 characters']
   },
-  trainingDataPath: {
-    type: String
-  },
-  
-  // Model Information
-  modelStatus: {
+
+  // Model Training
+  training_status: {
     type: String,
-    enum: ['untrained', 'training', 'trained', 'failed'],
-    default: 'untrained'
+    enum: ['none', 'pending', 'in_progress', 'completed', 'failed'],
+    default: 'none'
   },
-  statusDetails: {
-    type: String
+  training_columns: {
+    type: [String]
   },
-  trainingProgress: {
-    type: Number,
-    default: 0,
-    min: 0,
-    max: 100
+  model_params: {
+    type: mongoose.Schema.Types.Mixed
   },
-  trainingMetrics: {
-    type: Map,
-    of: String
-  },
-  lastTrained: {
-    type: Date
-  },
-  nextRetraining: {
-    type: Date
+  training_data_path: {
+      type: String
   },
   
   // Current Status
