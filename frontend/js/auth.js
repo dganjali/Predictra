@@ -1,29 +1,392 @@
-const API_BASE = window.location.hostname === 'localhost' 
-    ? 'http://localhost:5001' 
-    : 'https://blueshacksByteBite.onrender.com';
+// Authentication JavaScript file for sign in and sign up functionality
 
-const TOKEN_KEY = 'token';
-const USERNAME_KEY = 'username';
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize authentication functionality
+    initAuth();
+});
 
-export function isAuthenticated() {
-    return localStorage.getItem(TOKEN_KEY) !== null;
+function initAuth() {
+    // Check if we're on a sign in or sign up page
+    const signinForm = document.getElementById('signinForm');
+    const signupForm = document.getElementById('signupForm');
+    
+    if (signinForm) {
+        initSignIn(signinForm);
+    }
+    
+    if (signupForm) {
+        initSignUp(signupForm);
+    }
+    
+    // Initialize password toggles
+    initPasswordToggles();
+    
+    // Initialize password strength meter for signup
+    initPasswordStrength();
 }
 
-export function getToken() {
-    return localStorage.getItem(TOKEN_KEY);
+function initSignIn(form) {
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const submitBtn = form.querySelector('button[type="submit"]');
+        const btnText = submitBtn.querySelector('.btn-text');
+        const btnLoading = submitBtn.querySelector('.btn-loading');
+        
+        // Clear previous errors
+        clearErrors();
+        
+        // Get form data
+        const formData = new FormData(form);
+        const email = formData.get('email');
+        const password = formData.get('password');
+        
+        // Validate form
+        if (!validateSignInForm(email, password)) {
+            return;
+        }
+        
+        // Show loading state
+        submitBtn.classList.add('loading');
+        submitBtn.disabled = true;
+        
+        try {
+            const response = await fetch('/api/auth/signin', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    email: email,
+                    password: password
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                // Store token and user data
+                localStorage.setItem('token', data.token);
+                localStorage.setItem('user', JSON.stringify(data.user));
+                
+                // Show success message
+                if (window.authUtils && window.authUtils.showMessage) {
+                    window.authUtils.showMessage('Sign in successful! Redirecting...', 'success');
+                }
+                
+                // Redirect to dashboard
+                setTimeout(() => {
+                    window.location.href = '/dashboard';
+                }, 1000);
+            } else {
+                // Show error message
+                showError('email', data.message || 'Sign in failed');
+                if (window.authUtils && window.authUtils.showMessage) {
+                    window.authUtils.showMessage(data.message || 'Sign in failed', 'error');
+                }
+            }
+        } catch (error) {
+            console.error('Sign in error:', error);
+            showError('email', 'Network error. Please try again.');
+            if (window.authUtils && window.authUtils.showMessage) {
+                window.authUtils.showMessage('Network error. Please try again.', 'error');
+            }
+        } finally {
+            // Reset loading state
+            submitBtn.classList.remove('loading');
+            submitBtn.disabled = false;
+        }
+    });
 }
 
-export function setAuthData(token, username) {
-    localStorage.setItem(TOKEN_KEY, token);
-    localStorage.setItem(USERNAME_KEY, username);
+function initSignUp(form) {
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const submitBtn = form.querySelector('button[type="submit"]');
+        const btnText = submitBtn.querySelector('.btn-text');
+        const btnLoading = submitBtn.querySelector('.btn-loading');
+        
+        // Clear previous errors
+        clearErrors();
+        
+        // Get form data
+        const formData = new FormData(form);
+        const firstName = formData.get('firstName');
+        const lastName = formData.get('lastName');
+        const email = formData.get('email');
+        const company = formData.get('company');
+        const password = formData.get('password');
+        const confirmPassword = formData.get('confirmPassword');
+        const termsAccepted = formData.get('termsAccepted') === 'on';
+        
+        // Validate form
+        if (!validateSignUpForm(firstName, lastName, email, password, confirmPassword, termsAccepted)) {
+            return;
+        }
+        
+        // Show loading state
+        submitBtn.classList.add('loading');
+        submitBtn.disabled = true;
+        
+        try {
+            const response = await fetch('/api/auth/signup', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    firstName: firstName,
+                    lastName: lastName,
+                    email: email,
+                    company: company,
+                    password: password
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                // Store token and user data
+                localStorage.setItem('token', data.token);
+                localStorage.setItem('user', JSON.stringify(data.user));
+                
+                // Show success message
+                if (window.authUtils && window.authUtils.showMessage) {
+                    window.authUtils.showMessage('Account created successfully! Redirecting...', 'success');
+                }
+                
+                // Redirect to dashboard
+                setTimeout(() => {
+                    window.location.href = '/dashboard';
+                }, 1000);
+            } else {
+                // Handle validation errors
+                if (data.errors && Array.isArray(data.errors)) {
+                    data.errors.forEach(error => {
+                        showError(error.param, error.msg);
+                    });
+                } else {
+                    showError('email', data.message || 'Sign up failed');
+                }
+                
+                if (window.authUtils && window.authUtils.showMessage) {
+                    window.authUtils.showMessage(data.message || 'Sign up failed', 'error');
+                }
+            }
+        } catch (error) {
+            console.error('Sign up error:', error);
+            showError('email', 'Network error. Please try again.');
+            if (window.authUtils && window.authUtils.showMessage) {
+                window.authUtils.showMessage('Network error. Please try again.', 'error');
+            }
+        } finally {
+            // Reset loading state
+            submitBtn.classList.remove('loading');
+            submitBtn.disabled = false;
+        }
+    });
 }
 
-export function clearAuthData() {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USERNAME_KEY);
+function validateSignInForm(email, password) {
+    let isValid = true;
+    
+    // Validate email
+    if (!email || !email.trim()) {
+        showError('email', 'Email is required');
+        isValid = false;
+    } else if (!window.authUtils || !window.authUtils.validateEmail(email)) {
+        showError('email', 'Please enter a valid email address');
+        isValid = false;
+    }
+    
+    // Validate password
+    if (!password || !password.trim()) {
+        showError('password', 'Password is required');
+        isValid = false;
+    }
+    
+    return isValid;
 }
 
-export function logout() {
-    clearAuthData();
-    window.location.href = 'signin.html';
+function validateSignUpForm(firstName, lastName, email, password, confirmPassword, termsAccepted) {
+    let isValid = true;
+    
+    // Validate first name
+    if (!firstName || !firstName.trim()) {
+        showError('firstName', 'First name is required');
+        isValid = false;
+    } else if (firstName.trim().length < 2) {
+        showError('firstName', 'First name must be at least 2 characters');
+        isValid = false;
+    }
+    
+    // Validate last name
+    if (!lastName || !lastName.trim()) {
+        showError('lastName', 'Last name is required');
+        isValid = false;
+    } else if (lastName.trim().length < 2) {
+        showError('lastName', 'Last name must be at least 2 characters');
+        isValid = false;
+    }
+    
+    // Validate email
+    if (!email || !email.trim()) {
+        showError('email', 'Email is required');
+        isValid = false;
+    } else if (!window.authUtils || !window.authUtils.validateEmail(email)) {
+        showError('email', 'Please enter a valid email address');
+        isValid = false;
+    }
+    
+    // Validate password
+    if (!password || !password.trim()) {
+        showError('password', 'Password is required');
+        isValid = false;
+    } else if (password.length < 6) {
+        showError('password', 'Password must be at least 6 characters');
+        isValid = false;
+    } else if (window.authUtils) {
+        const passwordValidation = window.authUtils.validatePassword(password);
+        if (!passwordValidation.isValid) {
+            showError('password', 'Password is too weak. Please include uppercase, lowercase, numbers, and special characters.');
+            isValid = false;
+        }
+    }
+    
+    // Validate confirm password
+    if (!confirmPassword || !confirmPassword.trim()) {
+        showError('confirmPassword', 'Please confirm your password');
+        isValid = false;
+    } else if (password !== confirmPassword) {
+        showError('confirmPassword', 'Passwords do not match');
+        isValid = false;
+    }
+    
+    // Validate terms acceptance
+    if (!termsAccepted) {
+        showError('termsAccepted', 'You must accept the terms and conditions');
+        isValid = false;
+    }
+    
+    return isValid;
 }
+
+function initPasswordToggles() {
+    const passwordToggles = document.querySelectorAll('.password-toggle');
+    
+    passwordToggles.forEach(toggle => {
+        toggle.addEventListener('click', function() {
+            const input = this.parentElement.querySelector('input');
+            const icon = this.querySelector('i');
+            
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.className = 'fas fa-eye-slash';
+            } else {
+                input.type = 'password';
+                icon.className = 'fas fa-eye';
+            }
+        });
+    });
+}
+
+function initPasswordStrength() {
+    const passwordInput = document.getElementById('password');
+    const strengthFill = document.getElementById('strengthFill');
+    const strengthText = document.getElementById('strengthText');
+    
+    if (passwordInput && strengthFill && strengthText) {
+        passwordInput.addEventListener('input', function() {
+            const password = this.value;
+            
+            if (!password) {
+                strengthFill.className = 'strength-fill';
+                strengthFill.style.width = '0%';
+                strengthText.textContent = 'Password strength';
+                return;
+            }
+            
+            if (window.authUtils) {
+                const validation = window.authUtils.validatePassword(password);
+                const percentage = (validation.strength / validation.maxStrength) * 100;
+                
+                strengthFill.style.width = percentage + '%';
+                
+                if (validation.strength <= 1) {
+                    strengthFill.className = 'strength-fill weak';
+                    strengthText.textContent = 'Weak';
+                } else if (validation.strength <= 2) {
+                    strengthFill.className = 'strength-fill fair';
+                    strengthText.textContent = 'Fair';
+                } else if (validation.strength <= 3) {
+                    strengthFill.className = 'strength-fill good';
+                    strengthText.textContent = 'Good';
+                } else {
+                    strengthFill.className = 'strength-fill strong';
+                    strengthText.textContent = 'Strong';
+                }
+            }
+        });
+    }
+}
+
+function showError(fieldName, message) {
+    const errorElement = document.getElementById(fieldName + 'Error');
+    if (errorElement) {
+        errorElement.textContent = message;
+        errorElement.style.display = 'block';
+    }
+}
+
+function clearErrors() {
+    const errorElements = document.querySelectorAll('.error-message');
+    errorElements.forEach(element => {
+        element.textContent = '';
+        element.style.display = 'none';
+    });
+}
+
+// Real-time validation for signup form
+document.addEventListener('DOMContentLoaded', function() {
+    const signupForm = document.getElementById('signupForm');
+    if (signupForm) {
+        // Real-time email validation
+        const emailInput = signupForm.querySelector('#email');
+        if (emailInput) {
+            emailInput.addEventListener('blur', function() {
+                const email = this.value.trim();
+                if (email && window.authUtils && !window.authUtils.validateEmail(email)) {
+                    showError('email', 'Please enter a valid email address');
+                } else {
+                    clearFieldError('email');
+                }
+            });
+        }
+        
+        // Real-time password confirmation validation
+        const passwordInput = signupForm.querySelector('#password');
+        const confirmPasswordInput = signupForm.querySelector('#confirmPassword');
+        
+        if (passwordInput && confirmPasswordInput) {
+            confirmPasswordInput.addEventListener('input', function() {
+                const password = passwordInput.value;
+                const confirmPassword = this.value;
+                
+                if (confirmPassword && password !== confirmPassword) {
+                    showError('confirmPassword', 'Passwords do not match');
+                } else {
+                    clearFieldError('confirmPassword');
+                }
+            });
+        }
+    }
+});
+
+function clearFieldError(fieldName) {
+    const errorElement = document.getElementById(fieldName + 'Error');
+    if (errorElement) {
+        errorElement.textContent = '';
+        errorElement.style.display = 'none';
+    }
+} 

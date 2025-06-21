@@ -3,42 +3,214 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>About - ByteBite</title>
+    <title>About - Predictive Maintenance Dashboard</title>
     <link rel="stylesheet" href="css/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
     <nav class="navbar">
-        <div class="nav-left">
-            <img src="images/logo.png" alt="ByteBite Logo" class="nav-logo">
-            <a href="/">Home</a>
-            <a href="/about.html">About</a>
-        </div>
-"nav-right">
-            <a href="signin.html">Sign In</a>
-            <a href="signup.html">Sign Up</a>
+        <div class="nav-container">
+            <div class="nav-logo">
+                <i class="fas fa-cogs"></i>
+                <span>PredictiveMaintenance</span>
+            </div>
+            <ul class="nav-menu">
+                <li class="nav-item">
+                    <a href="/" class="nav-link">Home</a>
+                </li>
+                <li class="nav-item">
+                    <a href="/about" class="nav-link active">About</a>
+                </li>
+                <li class="nav-item">
+                    <a href="/signin" class="nav-link">Sign In</a>
+                </li>
+                <li class="nav-item">
+                    <a href="/signup" class="nav-link btn-primary">Sign Up</a>
+                </li>
+            </ul>
+            <div class="hamburger">
+                <span class="bar"></span>
+                <span class="bar"></span>
+                <span class="bar"></span>
+            </div>
         </div>
     </nav>
 
-    <div class="container">
-        <div class="form-container">
-            <div class="logo-container">
-                <img src="images/logo.png" alt="ByteBite Logo" class="logo">
+    <main>
+        <section class="about-hero">
+            <div class="container">
+                <h1>About Our Predictive Maintenance System</h1>
+                <p>Revolutionizing industrial maintenance with AI-powered RUL estimation</p>
             </div>
-            <h1>About ByteBite</h1>
-            <p>ByteBite is an innovative food bank inventory management system designed to help organizations efficiently manage their food distribution process.</p>
-            
-            <h2>Features</h2>
-            <ul>
-                <li>Smart inventory tracking</li>
-                <li>Nutritional information analysis</li>
-                <li>Distribution optimization</li>
-                <li>Real-time stock monitoring</li>
-                <li>Expiration date tracking</li>
-            </ul>
+        </section>
 
-            <h2>Our Mission</h2>
-            <p>To help food banks optimize their operations and better serve their communities through intelligent inventory management.</p>
+        <section class="about-content">
+            <div class="container">
+                <div class="about-section">
+                    <h2>Our Mission</h2>
+                    <p>We're developing a cutting-edge predictive maintenance platform that estimates the Remaining Useful Lifetime (RUL) of industrial machinery using advanced machine learning algorithms, anomaly detection, and Bayesian inference. Our goal is to help manufacturers reduce downtime, optimize maintenance schedules, and prevent unexpected equipment failures.</p>
+                </div>
+
+                <div class="about-section">
+                    <h2>The Challenge</h2>
+                    <p>Traditional predictive maintenance systems require extensive historical failure data, which most factories don't have. Additionally, machines are heterogeneous with different types, sensors, and operating conditions. Our solution addresses these challenges by generating pseudo-RUL estimates using anomaly scores and metadata, without requiring real failure labels.</p>
+                </div>
+
+                <div class="about-section">
+                    <h2>Our Solution</h2>
+                    <div class="solution-grid">
+                        <div class="solution-item">
+                            <div class="solution-icon">
+                                <i class="fas fa-brain"></i>
+                            </div>
+                            <h3>AI-Powered Analysis</h3>
+                            <p>Advanced machine learning algorithms analyze sensor data and detect anomalies to predict equipment degradation patterns.</p>
+                        </div>
+                        <div class="solution-item">
+                            <div class="solution-icon">
+                                <i class="fas fa-chart-line"></i>
+                            </div>
+                            <h3>Real-time Monitoring</h3>
+                            <p>Continuous monitoring of machine health with real-time alerts and predictive maintenance scheduling.</p>
+                        </div>
+                        <div class="solution-item">
+                            <div class="solution-icon">
+                                <i class="fas fa-shield-alt"></i>
+                            </div>
+                            <h3>Conservative Estimates</h3>
+                            <p>Bayesian inference ensures conservative RUL estimates to prevent unexpected failures and optimize maintenance.</p>
+                        </div>
+                        <div class="solution-item">
+                            <div class="solution-icon">
+                                <i class="fas fa-database"></i>
+                            </div>
+                            <h3>No Failure Data Required</h3>
+                            <p>Generate pseudo-RUL estimates using anomaly scores and metadata without requiring historical failure data.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="about-section">
+                    <h2>Technical Approach</h2>
+                    <div class="technical-details">
+                        <h3>Pipeline Overview</h3>
+                        <ol>
+                            <li><strong>Metadata & Prior Knowledge Extraction:</strong> Extract machine specifications, operating conditions, and manufacturer data.</li>
+                            <li><strong>Prior Model Initialization:</strong> Initialize cluster-specific degradation models using similar machines and manufacturer data.</li>
+                            <li><strong>Anomaly Score Computation:</strong> Generate anomaly scores using pre-trained autoencoders and compute degradation features.</li>
+                            <li><strong>Bayesian Inference:</strong> Update posterior distributions for degradation parameters using online learning.</li>
+                            <li><strong>RUL Estimation:</strong> Predict remaining useful lifetime with uncertainty quantification.</li>
+                            <li><strong>Conservative Alerts:</strong> Trigger alerts based on conservative estimates to prevent failures.</li>
+                        </ol>
+                    </div>
+                </div>
+
+                <div class="about-section">
+                    <h2>Key Features</h2>
+                    <div class="features-list">
+                        <div class="feature-item">
+                            <i class="fas fa-check-circle"></i>
+                            <span>Machine-specific RUL estimation without failure data</span>
+                        </div>
+                        <div class="feature-item">
+                            <i class="fas fa-check-circle"></i>
+                            <span>Hierarchical Bayesian models for per-machine customization</span>
+                        </div>
+                        <div class="feature-item">
+                            <i class="fas fa-check-circle"></i>
+                            <span>Uncertainty quantification for conservative estimates</span>
+                        </div>
+                        <div class="feature-item">
+                            <i class="fas fa-check-circle"></i>
+                            <span>Real-time anomaly detection and monitoring</span>
+                        </div>
+                        <div class="feature-item">
+                            <i class="fas fa-check-circle"></i>
+                            <span>Scalable architecture for multiple machines</span>
+                        </div>
+                        <div class="feature-item">
+                            <i class="fas fa-check-circle"></i>
+                            <span>User feedback integration for continuous improvement</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="about-section">
+                    <h2>Technology Stack</h2>
+                    <div class="tech-stack">
+                        <div class="tech-category">
+                            <h3>Backend</h3>
+                            <ul>
+                                <li>Node.js with Express</li>
+                                <li>MongoDB for data storage</li>
+                                <li>JWT for authentication</li>
+                                <li>Python for ML models (future)</li>
+                            </ul>
+                        </div>
+                        <div class="tech-category">
+                            <h3>Frontend</h3>
+                            <ul>
+                                <li>HTML5, CSS3, JavaScript</li>
+                                <li>Responsive design</li>
+                                <li>Real-time data visualization (future)</li>
+                            </ul>
+                        </div>
+                        <div class="tech-category">
+                            <h3>Machine Learning</h3>
+                            <ul>
+                                <li>Autoencoders for anomaly detection</li>
+                                <li>Bayesian inference</li>
+                                <li>Time series analysis</li>
+                                <li>Survival modeling</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="cta">
+            <div class="container">
+                <div class="cta-content">
+                    <h2>Ready to Get Started?</h2>
+                    <p>Join us in revolutionizing predictive maintenance with AI-powered insights.</p>
+                    <div class="cta-buttons">
+                        <a href="/signup" class="btn btn-primary btn-large">Start Free Trial</a>
+                        <a href="/" class="btn btn-secondary btn-large">Learn More</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h3>PredictiveMaintenance</h3>
+                    <p>Advanced machine learning for industrial predictive maintenance and RUL estimation.</p>
+                </div>
+                <div class="footer-section">
+                    <h4>Quick Links</h4>
+                    <ul>
+                        <li><a href="/">Home</a></li>
+                        <li><a href="/about">About</a></li>
+                        <li><a href="/signin">Sign In</a></li>
+                        <li><a href="/signup">Sign Up</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Contact</h4>
+                    <p>Email: info@predictivemaintenance.com</p>
+                    <p>Phone: +1 (555) 123-4567</p>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2024 PredictiveMaintenance. All rights reserved.</p>
+            </div>
         </div>
-    </div>
+    </footer>
+
+    <script src="js/main.js"></script>
 </body>
-</html>
+</html> 

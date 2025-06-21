@@ -3,79 +3,164 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ByteBite - Food Bank Inventory Management</title>
+    <title>Predictive Maintenance Dashboard - Home</title>
     <link rel="stylesheet" href="css/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
-    <!-- Navigation Bar -->
     <nav class="navbar">
-        <div class="nav-left">
-            <img src="images/logo.png" alt="ByteBite Logo" class="nav-logo">
-            <a href="index.html">Home</a>
-            <a href="about.html">About</a>
-        </div>
-        <div class="nav-right">
-            <a href="signin.html">Sign In</a>
-            <a href="signup.html">Sign Up</a>
+        <div class="nav-container">
+            <div class="nav-logo">
+                <i class="fas fa-cogs"></i>
+                <span>PredictiveMaintenance</span>
+            </div>
+            <ul class="nav-menu">
+                <li class="nav-item">
+                    <a href="/" class="nav-link active">Home</a>
+                </li>
+                <li class="nav-item">
+                    <a href="/about" class="nav-link">About</a>
+                </li>
+                <li class="nav-item">
+                    <a href="/signin" class="nav-link">Sign In</a>
+                </li>
+                <li class="nav-item">
+                    <a href="/signup" class="nav-link btn-primary">Sign Up</a>
+                </li>
+            </ul>
+            <div class="hamburger">
+                <span class="bar"></span>
+                <span class="bar"></span>
+                <span class="bar"></span>
+            </div>
         </div>
     </nav>
 
-    <!-- Hero Section -->
-    <section class="hero-section">
-        <div class="hero-content">
-            <h1>Welcome to ByteBite</h1>
-            <p class="tagline">Intelligent Food Bank Inventory Management</p>
-            <a href="signup.html" class="btn btn-cta">Get Started</a>
-        </div>
-        <img src="images/logo.png" alt="ByteBite Logo" class="hero-logo">
-    </section>
+    <main>
+        <section class="hero">
+            <div class="hero-container">
+                <div class="hero-content">
+                    <h1 class="hero-title">
+                        Machine-Specific RUL Estimation
+                    </h1>
+                    <p class="hero-subtitle">
+                        Advanced predictive maintenance using anomaly detection and Bayesian inference to estimate remaining useful lifetime for industrial machinery.
+                    </p>
+                    <div class="hero-buttons">
+                        <a href="/signup" class="btn btn-primary btn-large">
+                            <i class="fas fa-rocket"></i>
+                            Get Started
+                        </a>
+                        <a href="/about" class="btn btn-secondary btn-large">
+                            <i class="fas fa-info-circle"></i>
+                            Learn More
+                        </a>
+                    </div>
+                </div>
+                <div class="hero-image">
+                    <div class="dashboard-preview">
+                        <div class="preview-header">
+                            <div class="preview-dots">
+                                <span></span>
+                                <span></span>
+                                <span></span>
+                            </div>
+                        </div>
+                        <div class="preview-content">
+                            <div class="preview-chart"></div>
+                            <div class="preview-stats">
+                                <div class="stat-item">
+                                    <div class="stat-value">95%</div>
+                                    <div class="stat-label">Accuracy</div>
+                                </div>
+                                <div class="stat-item">
+                                    <div class="stat-value">24/7</div>
+                                    <div class="stat-label">Monitoring</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
 
-    <!-- Features Section -->
-    <section class="features-section container">
-        <h2>Features</h2>
-        <div class="features-grid">
-            <div class="feature-card">
-                <span class="feature-icon">📦</span>
-                <h3>Smart Inventory Tracking</h3>
-                <p>Monitor stock levels, expiration dates, and nutritional info in real time.</p>
+        <section class="features">
+            <div class="container">
+                <h2 class="section-title">Key Features</h2>
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-brain"></i>
+                        </div>
+                        <h3>AI-Powered Analysis</h3>
+                        <p>Advanced machine learning algorithms analyze sensor data and anomaly patterns to predict equipment failures.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-chart-line"></i>
+                        </div>
+                        <h3>Real-time Monitoring</h3>
+                        <p>Continuous monitoring of machine health with real-time alerts and predictive maintenance scheduling.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-shield-alt"></i>
+                        </div>
+                        <h3>Conservative Estimates</h3>
+                        <p>Bayesian inference ensures conservative RUL estimates to prevent unexpected failures and optimize maintenance.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-database"></i>
+                        </div>
+                        <h3>No Failure Data Required</h3>
+                        <p>Generate pseudo-RUL estimates using anomaly scores and metadata without requiring historical failure data.</p>
+                    </div>
+                </div>
             </div>
-            <div class="feature-card">
-                <span class="feature-icon">📊</span>
-                <h3>Distribution Optimization</h3>
-                <p>Get AI-powered recommendations for efficient food distribution.</p>
-            </div>
-            <div class="feature-card">
-                <span class="feature-icon">🍎</span>
-                <h3>Nutritional Analysis</h3>
-                <p>Ensure balanced, healthy food offerings for your community.</p>
-            </div>
-            <div class="feature-card">
-                <span class="feature-icon">⏰</span>
-                <h3>Expiration Alerts</h3>
-                <p>Never let food go to waste with proactive expiry notifications.</p>
-            </div>
-        </div>
-    </section>
+        </section>
 
-    <!-- Mission/Impact Section -->
-    <section class="mission-section">
-        <div class="container">
-            <h2>Our Mission</h2>
-            <p>To help food banks optimize their operations and better serve their communities through intelligent inventory management.</p>
-            <blockquote class="impact-quote">“Together, we can reduce waste and fight hunger with data-driven solutions.”</blockquote>
-        </div>
-    </section>
+        <section class="cta">
+            <div class="container">
+                <div class="cta-content">
+                    <h2>Ready to Transform Your Maintenance Strategy?</h2>
+                    <p>Join leading manufacturers who are already using our predictive maintenance platform to reduce downtime and optimize operations.</p>
+                    <a href="/signup" class="btn btn-primary btn-large">
+                        Start Your Free Trial
+                    </a>
+                </div>
+            </div>
+        </section>
+    </main>
 
-    <!-- Footer -->
     <footer class="footer">
         <div class="container">
-            <span>&copy; 2024 ByteBite. All rights reserved.</span>
-            <span class="footer-links">
-                <a href="about.html">About</a> |
-                <a href="signin.html">Sign In</a> |
-                <a href="signup.html">Sign Up</a>
-            </span>
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h3>PredictiveMaintenance</h3>
+                    <p>Advanced machine learning for industrial predictive maintenance and RUL estimation.</p>
+                </div>
+                <div class="footer-section">
+                    <h4>Quick Links</h4>
+                    <ul>
+                        <li><a href="/">Home</a></li>
+                        <li><a href="/about">About</a></li>
+                        <li><a href="/signin">Sign In</a></li>
+                        <li><a href="/signup">Sign Up</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Contact</h4>
+                    <p>Email: info@predictivemaintenance.com</p>
+                    <p>Phone: +1 (555) 123-4567</p>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2024 PredictiveMaintenance. All rights reserved.</p>
+            </div>
         </div>
     </footer>
+
+    <script src="js/main.js"></script>
 </body>
-</html>
+</html> 
