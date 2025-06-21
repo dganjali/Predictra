@@ -198,6 +198,8 @@ function initMachineManagement() {
                 viewMachineDetails(id);
             } else if (action === 'calculate-risk') {
                 openPredictionModal(id);
+            } else if (action === 'train-model') {
+                openTrainModal(id);
             } else if (action === 'remove-machine') {
                 handleRemoveMachine(id);
             }
@@ -221,6 +223,9 @@ function initMachineManagement() {
         });
         predictionForm.addEventListener('submit', handlePrediction);
     }
+
+    // Initialize the new training modal
+    initTrainMachineModal();
 }
 
 function initAddMachineModal() {
@@ -229,56 +234,112 @@ function initAddMachineModal() {
 
     const form = document.getElementById('addMachineForm');
     const closeModalBtn = document.getElementById('closeModal');
-    const nextBtn = document.getElementById('nextBtn');
-    const prevBtn = document.getElementById('prevBtn');
-    const submitBtn = document.getElementById('submitBtn');
-    const finishBtn = document.getElementById('finishBtn');
-    const steps = [...document.querySelectorAll('.form-step')];
-    const indicators = [...document.querySelectorAll('.step-indicator')];
-    let currentStep = 0;
-    let pollerId = null; // To hold the interval ID for the modal poller
+    const openModalBtn = document.getElementById('addMachineBtn');
 
-    const openModal = () => {
-        currentStep = 0;
-        updateFormSteps();
-        modal.classList.add('show');
+    const openModal = () => modal.classList.add('show');
+    const closeModal = () => {
+        modal.classList.remove('show');
+        form.reset();
     };
+
+    openModalBtn.addEventListener('click', openModal);
+    closeModalBtn.addEventListener('click', closeModal);
+
+    const addFirstMachineBtn = document.getElementById('addFirstMachineBtn');
+    if (addFirstMachineBtn) {
+        addFirstMachineBtn.addEventListener('click', openModal);
+    }
     
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const submitBtn = form.querySelector('#submitBtn');
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Adding...';
+
+        const formData = new FormData(form);
+        const machineData = Object.fromEntries(formData.entries());
+
+        try {
+            const response = await fetch('/api/dashboard/machines', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify(machineData)
+            });
+            const result = await response.json();
+            if (result.success) {
+                showMessage('Machine added successfully!', 'success');
+                closeModal();
+                loadDashboardData();
+            } else {
+                showMessage(`Error: ${result.message}`, 'error');
+            }
+        } catch (error) {
+            showMessage('Network error. Could not add machine.', 'error');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Add Machine';
+        }
+    });
+}
+
+let currentTrainMachineId = null;
+let trainEventSource = null;
+
+function openTrainModal(machineId) {
+    currentTrainMachineId = machineId;
+    const machine = allMachines.find(m => m._id === machineId);
+    if (!machine) {
+        showMessage('Could not find machine to train.', 'error');
+        return;
+    }
+    document.getElementById('trainModalTitle').textContent = `Train Model for ${machine.machineName}`;
+    document.getElementById('trainMachineModal').classList.add('show');
+}
+
+function initTrainMachineModal() {
+    const modal = document.getElementById('trainMachineModal');
+    if (!modal) return;
+
+    const form = document.getElementById('trainMachineForm');
+    const closeModalBtn = document.getElementById('closeTrainModal');
+    const nextBtn = document.getElementById('nextTrainBtn');
+    const prevBtn = document.getElementById('prevTrainBtn');
+    const submitBtn = document.getElementById('submitTrainBtn');
+    const finishBtn = document.getElementById('finishTrainBtn');
+    const steps = [...modal.querySelectorAll('.form-step')];
+    const indicators = [...modal.querySelectorAll('.step-indicator')];
+    let currentStep = 0;
+    
+    let originalCsvHeaders = [];
+    const idTsSynonyms = ['id', 'timestamp', 'timestamps', 'time_stamp'];
+
     const closeModal = () => {
         modal.classList.remove('show');
         form.reset();
         currentStep = 0;
         updateFormSteps();
-        if (pollerId) {
-            clearInterval(pollerId);
-            pollerId = null;
+        if (trainEventSource) {
+            trainEventSource.close();
+            trainEventSource = null;
         }
-        if (eventSource) {
-            eventSource.close();
-            eventSource = null;
-        }
-        document.getElementById('columnCheckboxes').innerHTML = '';
-        document.getElementById('sensorConfigContainer').innerHTML = '';
-        document.getElementById('finishBtn').style.display = 'none';
-        document.getElementById('modalProgressLabel').textContent = 'Initializing...';
-        document.getElementById('modalProgressBar').style.width = '0%';
+        document.getElementById('columnCheckboxesTrain').innerHTML = '';
+        document.getElementById('sensorConfigContainerTrain').innerHTML = '';
+        document.getElementById('finishTrainBtn').style.display = 'none';
+        document.getElementById('modalProgressLabelTrain').textContent = 'Initializing...';
+        document.getElementById('modalProgressBarTrain').style.width = '0%';
+        currentTrainMachineId = null;
     };
 
-    document.getElementById('addMachineBtn').addEventListener('click', openModal);
-    
-    const addFirstMachineBtn = document.getElementById('addFirstMachineBtn');
-    if (addFirstMachineBtn) {
-        addFirstMachineBtn.addEventListener('click', openModal);
-    }
     closeModalBtn.addEventListener('click', closeModal);
     finishBtn.addEventListener('click', closeModal);
-
+    
     nextBtn.addEventListener('click', () => {
         if (validateStep(currentStep)) {
             currentStep++;
-            if (currentStep === 2) {
-                generateSensorConfigUI();
-            }
+            if (currentStep === 2) generateSensorConfigUI();
             updateFormSteps();
         }
     });
@@ -289,13 +350,8 @@ function initAddMachineModal() {
     });
 
     function updateFormSteps() {
-        steps.forEach((step, index) => {
-            step.style.display = index === currentStep ? 'block' : 'none';
-        });
-        indicators.forEach((indicator, index) => {
-            indicator.classList.toggle('active', index === currentStep);
-        });
-
+        steps.forEach((step, index) => step.style.display = index === currentStep ? 'block' : 'none');
+        indicators.forEach((indicator, index) => indicator.classList.toggle('active', index === currentStep));
         const isTrainingStep = currentStep === 3;
         prevBtn.style.display = (currentStep > 0 && !isTrainingStep) ? 'inline-block' : 'none';
         nextBtn.style.display = (currentStep < steps.length - 2) ? 'inline-block' : 'none';
@@ -304,200 +360,129 @@ function initAddMachineModal() {
 
     function validateStep(stepIndex) {
         const step = steps[stepIndex];
-        const inputs = [...step.querySelectorAll('input[required], select[required]')];
-        let isValid = true;
+        const inputs = [...step.querySelectorAll('input[required]')];
         for (const input of inputs) {
             if (!input.value.trim()) {
-                input.classList.add('is-invalid');
-                isValid = false;
-            } else {
-                input.classList.remove('is-invalid');
+                showMessage('Please fill out all required fields.', 'error');
+                return false;
             }
         }
-        if (!isValid) {
-            showMessage('Please fill out all required fields.', 'error');
-        }
-        return isValid;
-    }
-    
-    function generateSensorConfigUI() {
-        const selectedColumns = [...document.querySelectorAll('input[name="columns"]:checked')].map(cb => cb.value);
-        const sensorConfigContainer = document.getElementById('sensorConfigContainer');
-        sensorConfigContainer.innerHTML = '';
-        const idTsSynonyms = ['id', 'timestamp', 'timestamps', 'time_stamp'];
-        const sensorsToConfigure = selectedColumns.filter(c => !idTsSynonyms.includes(c.toLowerCase()));
-        sensorsToConfigure.forEach(column => {
-            const item = document.createElement('div');
-            item.classList.add('sensor-config-item');
-            item.innerHTML = `
-                <label>${column}</label>
-                <div class="form-group"><input type="text" name="sensor_display_${column}" placeholder="Display Name" required class="form-control" value="${column}"></div>
-                <div class="form-group"><input type="text" name="sensor_unit_${column}" placeholder="Unit (e.g., °C, kPa)" required class="form-control"></div>
-            `;
-            sensorConfigContainer.appendChild(item);
-        });
+        return true;
     }
 
-    const csvFileInput = document.getElementById('csvFile');
-    const columnCheckboxesContainer = document.getElementById('columnCheckboxes');
-    let originalCsvHeaders = [];
-    const idTsSynonyms = ['id', 'timestamp', 'timestamps', 'time_stamp'];
-
+    const csvFileInput = document.getElementById('csvFileTrain');
     csvFileInput.addEventListener('change', (event) => {
         const file = event.target.files[0];
-        if (!file) { return; }
+        if (!file) return;
         Papa.parse(file, {
-            header: true, skipEmptyLines: true, preview: 1,
+            header: true, preview: 1, skipEmptyLines: true,
             complete: (results) => {
                 originalCsvHeaders = results.meta.fields;
-                columnCheckboxesContainer.innerHTML = ''; 
-                
+                const container = document.getElementById('columnCheckboxesTrain');
+                container.innerHTML = '';
                 const displayHeaders = originalCsvHeaders.filter(h => !idTsSynonyms.includes(h.toLowerCase()));
-
                 displayHeaders.forEach(header => {
-                    const checkboxDiv = document.createElement('div');
-                    checkboxDiv.classList.add('checkbox-item');
-                    
-                    const checkbox = document.createElement('input');
-                    checkbox.type = 'checkbox';
-                    checkbox.id = `col-${header}`;
-                    checkbox.name = 'columns';
-                    checkbox.value = header;
-                    checkbox.checked = false; // Unchecked by default
-                    
-                    checkbox.addEventListener('change', () => checkboxDiv.classList.toggle('selected', checkbox.checked));
-                    
-                    const label = document.createElement('label');
-                    label.htmlFor = `col-${header}`;
-                    label.textContent = header;
-                    
-                    checkboxDiv.appendChild(checkbox);
-                    checkboxDiv.appendChild(label);
-                    columnCheckboxesContainer.appendChild(checkboxDiv);
+                    const cbDiv = document.createElement('div');
+                    cbDiv.className = 'checkbox-item';
+                    cbDiv.innerHTML = `<input type="checkbox" id="train-col-${header}" name="columns" value="${header}"><label for="train-col-${header}">${header}</label>`;
+                    container.appendChild(cbDiv);
                 });
-            },
-            error: (err) => { console.error('Error parsing CSV:', err); alert('Error parsing CSV file.'); }
+            }
         });
     });
+    
+    function generateSensorConfigUI() {
+        const selected = [...modal.querySelectorAll('input[name="columns"]:checked')].map(cb => cb.value);
+        const container = document.getElementById('sensorConfigContainerTrain');
+        container.innerHTML = '';
+        selected.forEach(column => {
+            const item = document.createElement('div');
+            item.className = 'sensor-config-item';
+            item.innerHTML = `<label>${column}</label><div class="form-group"><input type="text" name="sensor_display_${column}" placeholder="Display Name" required class="form-control" value="${column}"></div><div class="form-group"><input type="text" name="sensor_unit_${column}" placeholder="Unit" required class="form-control"></div>`;
+            container.appendChild(item);
+        });
+    }
 
-    async function handleAddMachine(e) {
+    form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        if (!validateStep(2)) return;
+        if (!validateStep(2) || !currentTrainMachineId) return;
 
-        const form = e.target;
-        const formData = new FormData(form);
-        const token = localStorage.getItem('token');
+        currentStep = 3;
+        updateFormSteps();
         
-        // 1. Get user-selected feature columns
-        const featureColumns = [...document.querySelectorAll('input[name="columns"]:checked')].map(cb => cb.value);
-
-        // 2. Find required ID and Timestamp columns from original headers
+        const formData = new FormData(form);
+        const featureColumns = [...modal.querySelectorAll('input[name="columns"]:checked')].map(cb => cb.value);
         const requiredColumns = originalCsvHeaders.filter(h => idTsSynonyms.includes(h.toLowerCase()));
-
-        // 3. Combine for the 'columns' field and clean up form data
         const allColumns = [...new Set([...featureColumns, ...requiredColumns])];
         formData.delete('columns');
         formData.append('columns', JSON.stringify(allColumns));
         
-        // 4. Collect sensor configuration and clean up form data
-        const sensors = [];
+        const sensors = featureColumns.map(column => ({
+            sensorId: column,
+            name: formData.get(`sensor_display_${column}`),
+            unit: formData.get(`sensor_unit_${column}`)
+        }));
         featureColumns.forEach(column => {
-            sensors.push({
-                sensorId: column,
-                name: formData.get(`sensor_display_${column}`),
-                unit: formData.get(`sensor_unit_${column}`)
-            });
-            // Clean up the individual fields
             formData.delete(`sensor_display_${column}`);
             formData.delete(`sensor_unit_${column}`);
         });
         formData.append('sensors', JSON.stringify(sensors));
-        
-        // --- UI transition to progress view ---
-        currentStep = 3;
-        updateFormSteps();
-        showMessage('Uploading data and starting training...', 'info');
 
         try {
-            const response = await fetch('/api/dashboard/machines', { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: formData });
+            const response = await fetch(`/api/dashboard/machine/${currentTrainMachineId}/train`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                body: formData
+            });
             const data = await response.json();
-            
             if (!data.success) {
                 showMessage(`Error: ${data.message}`, 'error');
-                // Allow user to go back
-                currentStep = 2; 
-                updateFormSteps();
-                return;
+                currentStep = 2; updateFormSteps();
+            } else {
+                startTrainPolling(currentTrainMachineId);
             }
-            
-            // Start polling for progress inside the modal
-            startModalPolling(data.machine._id);
-
         } catch (error) {
-            console.error('Error adding machine:', error);
-            showMessage('Network error when adding machine. Please try again.', 'error');
-            // Allow user to go back
-            currentStep = 2;
-            updateFormSteps();
+            showMessage('Network error. Could not start training.', 'error');
+            currentStep = 2; updateFormSteps();
         }
-    }
+    });
+}
 
-    let eventSource = null;
+function startTrainPolling(machineId) {
+    const progressBar = document.getElementById('modalProgressBarTrain');
+    const progressLabel = document.getElementById('modalProgressLabelTrain');
+    const finishBtn = document.getElementById('finishTrainBtn');
 
-    function startModalPolling(machineId) {
-        const progressBar = document.getElementById('modalProgressBar');
-        const progressLabel = document.getElementById('modalProgressLabel');
-        const finishBtn = document.getElementById('finishBtn');
+    if (trainEventSource) trainEventSource.close();
+    
+    const token = localStorage.getItem('token');
+    trainEventSource = new EventSource(`/api/dashboard/machine/${machineId}/status?token=${token}`);
 
-        // Close any existing connection
-        if (eventSource) {
-            eventSource.close();
-        }
+    trainEventSource.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.success) {
+            progressBar.style.width = `${data.progress || 0}%`;
+            progressLabel.textContent = data.message || 'Processing...';
 
-        // Use EventSource to connect to our SSE endpoint
-        eventSource = new EventSource(`/api/dashboard/machine/${machineId}/status`);
-
-        eventSource.onopen = () => {
-            console.log("Connection to server opened for status updates.");
-        };
-
-        eventSource.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                if (data.success) {
-                    progressBar.style.width = `${data.progress || 0}%`;
-                    progressLabel.textContent = data.message || 'Processing...';
-
-                    if (data.status === 'completed' || data.status === 'failed') {
-                        eventSource.close();
-                        eventSource = null;
-                        finishBtn.style.display = 'inline-block';
-                        progressLabel.textContent = data.status === 'completed' ? 'Training successful!' : `Training failed: ${data.message}`;
-                        loadDashboardData(); // Refresh dashboard in the background
-                    }
-                } else {
-                    eventSource.close();
-                    eventSource = null;
-                    progressLabel.textContent = `Error: ${data.message}`;
-                    finishBtn.style.display = 'inline-block';
-                }
-            } catch (err) {
-                console.error("Error parsing server event:", err);
-                progressLabel.textContent = 'Error: Invalid data from server.';
-                eventSource.close();
+            if (data.status === 'completed' || data.status === 'failed') {
+                trainEventSource.close();
+                trainEventSource = null;
+                finishBtn.style.display = 'inline-block';
+                progressLabel.textContent = data.status === 'completed' ? 'Training successful!' : `Training failed: ${data.message}`;
+                loadDashboardData();
             }
-        };
-
-        eventSource.onerror = (err) => {
-            console.error("EventSource failed:", err);
-            progressLabel.textContent = 'Error: Could not retrieve training status.';
+        } else {
+            trainEventSource.close();
+            progressLabel.textContent = `Error: ${data.message}`;
             finishBtn.style.display = 'inline-block';
-            eventSource.close();
-            eventSource = null;
-        };
-    }
+        }
+    };
 
-    form.addEventListener('submit', handleAddMachine);
+    trainEventSource.onerror = () => {
+        progressLabel.textContent = 'Error: Connection to server lost.';
+        finishBtn.style.display = 'inline-block';
+        if (trainEventSource) trainEventSource.close();
+    };
 }
 
 function showMessage(message, type = 'info') {
@@ -651,6 +636,9 @@ function displayMachines(machines) {
                             <button class="dropdown-toggle" ${training_status === 'in_progress' ? 'disabled' : ''}><i class="fas fa-ellipsis-v"></i></button>
                             <div class="dropdown-menu">
                                 <button class="dropdown-item" data-action="view-details" data-id="${_id}"><i class="fas fa-eye"></i> View Details</button>
+                                <button class="dropdown-item" data-action="train-model" data-id="${_id}" ${training_status === 'in_progress' ? 'disabled' : ''}>
+                                    <i class="fas fa-brain"></i> Train Model
+                                </button>
                                 <button class="dropdown-item" data-action="calculate-risk" data-id="${_id}" ${!isTrained ? 'disabled' : ''}>
                                     <i class="fas fa-calculator"></i> Calculate Risk
                                 </button>
@@ -829,6 +817,34 @@ function displayAlerts(alerts) {
     `).join('');
 }
 
+function renderSensorTable(sensors) {
+    if (!sensors || sensors.length === 0) {
+        return '<p>No sensors configured.</p>';
+    }
+    let tableHTML = `
+        <table class="details-table">
+            <thead>
+                <tr>
+                    <th>Sensor ID</th>
+                    <th>Display Name</th>
+                    <th>Unit</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    sensors.forEach(sensor => {
+        tableHTML += `
+            <tr>
+                <td>${sensor.sensorId || 'N/A'}</td>
+                <td>${sensor.name || 'N/A'}</td>
+                <td>${sensor.unit || 'N/A'}</td>
+            </tr>
+        `;
+    });
+    tableHTML += '</tbody></table>';
+    return tableHTML;
+}
+
 function viewMachineDetails(machineId) {
     const machine = allMachines.find(m => m._id === machineId);
     if (!machine) {
@@ -840,22 +856,46 @@ function viewMachineDetails(machineId) {
     const modalBody = document.getElementById('machineDetailsBody');
     const modal = document.getElementById('machineDetailsModal');
 
-    modalTitle.textContent = `Details for ${machine.name}`;
+    modalTitle.textContent = `Details for ${machine.machineName}`;
     
-    // Helper to create detail pairs
     const createDetail = (label, value) => {
-        const val = value || 'N/A';
+        const val = (value !== null && value !== undefined && value !== '') ? value : '<span class="not-available">N/A</span>';
         return `<div class="detail-pair"><span class="label">${label}</span><span class="value">${val}</span></div>`;
     };
+
+    const isTrained = machine.training_status === 'completed';
+    const trainingParams = machine.model_params || {};
 
     modalBody.innerHTML = `
         <div class="details-grid">
             <div class="details-section">
-                <h3><i class="fas fa-tachometer-alt"></i> Status & Metrics</h3>
-                ${createDetail('Status', `<span class="status-badge" style="background-color: ${getStatusColor(machine.status)};">${machine.status}</span>`)}
+                <h3><i class="fas fa-info-circle"></i> Identification</h3>
+                ${createDetail('Machine Type', machine.machineType)}
+                ${createDetail('Manufacturer', machine.manufacturer)}
+                ${createDetail('Model', machine.model)}
+                ${createDetail('Serial Number', machine.serialNumber)}
+            </div>
+
+            <div class="details-section">
+                <h3><i class="fas fa-tachometer-alt"></i> Operational Status</h3>
                 ${createDetail('Health Score', machine.healthScore)}
                 ${createDetail('Est. RUL (days)', machine.rulEstimate)}
                 ${createDetail('Last Updated', new Date(machine.lastUpdated).toLocaleString())}
+                 ${createDetail('Last Trained', isTrained && machine.updatedAt ? new Date(machine.updatedAt).toLocaleString() : 'Not Trained')}
+            </div>
+            
+            <div class="details-section full-width">
+                <h3><i class="fas fa-brain"></i> Model Details</h3>
+                <div class="details-subsection">
+                    ${createDetail('Training Status', `<span class="status-badge ${machine.training_status}">${machine.training_status || 'none'}</span>`)}
+                    ${isTrained ? createDetail('Anomaly Threshold', trainingParams.threshold ? trainingParams.threshold.toFixed(4) : 'N/A') : ''}
+                    ${isTrained ? createDetail('Avg. Training Loss', trainingParams.mean_loss ? trainingParams.mean_loss.toFixed(4) : 'N/A') : ''}
+                </div>
+            </div>
+
+            <div class="details-section full-width">
+                <h3><i class="fas fa-tasks"></i> Configured Sensors</h3>
+                ${renderSensorTable(machine.sensors)}
             </div>
         </div>
     `;

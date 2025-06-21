@@ -158,32 +158,20 @@ router.get('/data', auth, async (req, res) => {
                 email: user.email
             },
             machines: machines.map(machine => ({
-                id: machine._id,
-                name: machine.machineName,
-                type: machine.machineType,
+                _id: machine._id,
+                machineName: machine.machineName,
+                machineType: machine.machineType,
+                manufacturer: machine.manufacturer,
+                model: machine.model,
+                serialNumber: machine.serialNumber,
                 status: machine.status,
                 healthScore: machine.healthScore,
                 rulEstimate: machine.rulEstimate,
                 lastUpdated: machine.lastUpdated,
-                location: machine.location,
-                criticality: machine.criticality,
-                scadaSystem: machine.scadaSystem,
                 sensors: machine.sensors,
-                modelStatus: machine.modelStatus,
-                statusDetails: machine.statusDetails,
-                lastTrained: machine.lastTrained,
-                manufacturer: machine.manufacturer,
-                model: machine.model,
-                serialNumber: machine.serialNumber,
-                assetTag: machine.assetTag,
-                scadaVersion: machine.scadaVersion,
-                plcType: machine.plcType,
-                communicationProtocol: machine.communicationProtocol,
-                ipAddress: machine.ipAddress,
-                port: machine.port,
-                department: machine.department,
-                installationDate: machine.installationDate,
-                lastMaintenance: machine.lastMaintenance
+                training_status: machine.training_status,
+                model_params: machine.model_params,
+                // Add any other fields from the schema you want to expose
             })),
             alerts: alerts,
             stats: stats
@@ -197,46 +185,74 @@ router.get('/data', auth, async (req, res) => {
 });
 
 // @route   POST /api/dashboard/machines
-// @desc    Add a new machine, optionally with a CSV for training
+// @desc    Add a new machine (without training)
 // @access  Private
-router.post('/machines', auth, upload.single('csvFile'), async (req, res) => {
+router.post('/machines', auth, async (req, res) => {
     try {
-        const { machineName, machineType, manufacturer, model, serialNumber, sensors, columns } = req.body;
+        const { machineName, machineType, manufacturer } = req.body;
         const user = req.user;
 
         const newMachine = new Machine({
-            machineName,
-            machineType,
-            manufacturer,
-            model,
-            serialNumber,
+            ...req.body,
             userId: user._id,
-            sensors: JSON.parse(sensors || '[]'),
-            training_columns: JSON.parse(columns || '[]'),
-            modelStatus: 'untrained',
-            statusDetails: 'Machine added. Ready for data connection.'
+            training_status: 'none'
         });
-
-        if (req.file) {
-            newMachine.training_data_path = req.file.path;
-            newMachine.training_status = 'pending';
-        }
 
         await newMachine.save();
 
-        if (req.file) {
-            // Start training process in the background
-            trainModel(newMachine, user);
-        }
-
         res.status(201).json({
             success: true,
-            message: 'Machine added successfully. Training will start shortly if a file was provided.',
+            message: 'Machine added successfully.',
             machine: newMachine
         });
 
     } catch (error) {
         console.error('Add machine error:', error);
+        // Handle validation errors specifically
+        if (error.name === 'ValidationError') {
+            return res.status(400).json({ success: false, message: error.message });
+        }
+        res.status(500).json({ success: false, message: `Server error: ${error.message}` });
+    }
+});
+
+// @route   POST /api/dashboard/machine/:machineId/train
+// @desc    Train a model for an existing machine
+// @access  Private
+router.post('/machine/:machineId/train', auth, upload.single('csvFile'), async (req, res) => {
+    try {
+        const { machineId } = req.params;
+        const { sensors, columns } = req.body;
+        const user = req.user;
+
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: 'Training data file is required.' });
+        }
+        
+        const machine = await Machine.findOne({ _id: machineId, userId: user._id });
+        if (!machine) {
+            return res.status(404).json({ success: false, message: 'Machine not found.' });
+        }
+
+        // Update machine with new training info
+        machine.sensors = JSON.parse(sensors || '[]');
+        machine.training_columns = JSON.parse(columns || '[]');
+        machine.training_data_path = req.file.path;
+        machine.training_status = 'pending'; // Set to pending to kick off polling
+        
+        await machine.save();
+
+        // Start training process in the background
+        trainModel(machine, user);
+
+        res.status(200).json({
+            success: true,
+            message: 'Training has started successfully.',
+            machine: machine
+        });
+
+    } catch (error) {
+        console.error('Train machine error:', error);
         res.status(500).json({ success: false, message: `Server error: ${error.message}` });
     }
 });

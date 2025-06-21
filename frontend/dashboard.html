@@ -144,130 +144,133 @@
                 <h2>Add New Machine</h2>
                 <button class="modal-close" id="closeModal">&times;</button>
             </div>
-            <form id="addMachineForm" class="modal-form" novalidate>
-                <!-- Step 1: Machine Info & Data Upload -->
+            <form id="addMachineForm">
+                <!-- Step 1: Machine Details -->
                 <div class="form-step" id="formStep1">
                     <div class="step-header">
-                        <i class="fas fa-info-circle"></i>
+                        <i class="fas fa-plus-circle"></i>
                         <div>
-                            <h4>Step 1: Machine Details</h4>
-                            <p>Enter the basic identification details for your equipment.</p>
+                            <h4>Add New Machine</h4>
+                            <p>Enter the basic details for your new equipment.</p>
                         </div>
                     </div>
                     <div class="form-section">
-                        <h3>Machine Identification</h3>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="machineName">Machine Name</label>
-                                <input type="text" id="machineName" name="machineName" required placeholder="e.g., Main Water Pump">
-                            </div>
-                            <div class="form-group">
-                                <label for="machineType">Machine Type</label>
-                                <select id="machineType" name="machineType" required>
-                                    <option value="" disabled selected>Select type...</option>
-                                    <option value="pump">Pump</option>
-                                    <option value="motor">Motor</option>
-                                    <option value="compressor">Compressor</option>
-                                    <option value="turbine">Turbine</option>
-                                    <option value="other">Other</option>
-                                </select>
-                            </div>
-                        </div>
-                         <div class="form-row">
-                            <div class="form-group">
-                                <label for="manufacturer">Manufacturer</label>
-                                <input type="text" id="manufacturer" name="manufacturer" placeholder="e.g., Siemens">
-                            </div>
-                            <div class="form-group">
-                                <label for="model">Model</label>
-                                <input type="text" id="model" name="model" required placeholder="e.g., S-1000">
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="serialNumber">Serial Number</label>
-                                <input type="text" id="serialNumber" name="serialNumber" required placeholder="e.g., SN-A12345BC">
-                            </div>
-                        </div>
-                    </div>
-                    <div class="form-section">
-                        <h3>Model Training Data</h3>
-                        <p>Upload a CSV file with historical data. This should include a timestamp column and sensor readings.</p>
+                        <h3>Machine Information</h3>
                         <div class="form-group">
-                            <label for="csvFile">Training Data File (.csv)</label>
-                            <input type="file" id="csvFile" name="csvFile" accept=".csv" required>
+                            <label for="machineName">Machine Name*</label>
+                            <input type="text" id="machineName" name="machineName" class="form-control" required>
                         </div>
-                    </div>
-                </div>
-
-                <!-- Step 2: Select Sensors -->
-                <div class="form-step" id="formStep2" style="display: none;">
-                    <div class="step-header">
-                        <i class="fas fa-tasks"></i>
-                        <div>
-                            <h4>Step 2: Select Sensors</h4>
-                            <p>Choose the columns from your CSV to use as model features.</p>
+                        <div class="form-group">
+                            <label for="machineType">Machine Type*</label>
+                            <select id="machineType" name="machineType" class="form-control" required>
+                                <option value="" disabled selected>Select type...</option>
+                                <option value="pump">Pump</option>
+                                <option value="motor">Motor</option>
+                                <option value="compressor">Compressor</option>
+                                <!-- Add other types as needed -->
+                                <option value="other">Other</option>
+                            </select>
                         </div>
-                    </div>
-                    <div class="form-section">
-                        <h3>Sensor Columns</h3>
-                        <p>A `timestamp` and `id` column are required and automatically selected if found.</p>
-                        <div id="columnSelection">
-                            <div id="columnCheckboxes" class="checkbox-group">
-                                <!-- Checkboxes will be dynamically inserted here -->
-                            </div>
+                        <div class="form-group">
+                            <label for="manufacturer">Manufacturer</label>
+                            <input type="text" id="manufacturer" name="manufacturer" class="form-control">
                         </div>
-                    </div>
-                </div>
-
-                <!-- Step 3: Configure Sensors -->
-                <div class="form-step" id="formStep3" style="display: none;">
-                    <div class="step-header">
-                        <i class="fas fa-sliders-h"></i>
-                        <div>
-                            <h4>Step 3: Configure Sensors</h4>
-                            <p>Customize display names and units for each sensor.</p>
-                        </div>
-                    </div>
-                    <div class="form-section">
-                        <h3>Sensor Details</h3>
-                        <div id="sensorConfigContainer" class="sensor-config-list">
-                            <!-- Sensor config fields will be dynamically inserted here -->
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Step 4: Training Progress -->
-                <div class="form-step" id="formStep4" style="display: none;">
-                    <div class="step-header">
-                        <i class="fas fa-cogs fa-spin"></i>
-                        <div>
-                            <h4>Training in Progress...</h4>
-                            <p>Please keep this window open. The model is being trained with your data.</p>
-                        </div>
-                    </div>
-                    <div class="training-progress-view">
-                         <div id="modalProgressContainer" class="progress-bar-container">
-                            <div id="modalProgressBar" class="progress-bar" style="width: 0%;"></div>
-                        </div>
-                        <p id="modalProgressLabel" class="status-details-text">Initializing...</p>
-                        <button type="button" class="btn btn-primary" id="finishBtn" style="display: none; margin-top: 1rem;">Finish</button>
                     </div>
                 </div>
 
                 <!-- Navigation -->
                 <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" id="prevBtn" style="display: none;">Previous</button>
-                    <button type="button" class="btn btn-primary" id="nextBtn">Next</button>
-                    <button type="submit" class="btn btn-primary" id="submitBtn" style="display: none;">Add Machine & Train</button>
-                </div>
-                 <div class="step-indicator-container">
-                    <span class="step-indicator active"></span>
-                    <span class="step-indicator"></span>
-                    <span class="step-indicator"></span>
-                    <span class="step-indicator"></span>
+                    <button type="button" id="closeModal" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" id="submitBtn" class="btn btn-primary">Add Machine</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Train Machine Modal -->
+    <div id="trainMachineModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="trainModalTitle">Train Model</h2>
+                <button id="closeTrainModal" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="trainMachineForm">
+                    <!-- Step Indicators -->
+                    <div class="step-indicators">
+                        <span class="step-indicator active"></span>
+                        <span class="step-indicator"></span>
+                        <span class="step-indicator"></span>
+                    </div>
+
+                    <!-- Step 1: Upload CSV -->
+                    <div class="form-step" id="trainFormStep1">
+                        <div class="step-header">
+                            <i class="fas fa-file-csv"></i>
+                            <div>
+                                <h4>Upload Historical Data</h4>
+                                <p>Provide a CSV file with sensor readings over time.</p>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="csvFileTrain">Training Data (CSV)*</label>
+                            <input type="file" id="csvFileTrain" name="csvFile" class="form-control" accept=".csv" required>
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Select Sensors -->
+                    <div class="form-step" id="trainFormStep2" style="display: none;">
+                        <div class="step-header">
+                            <i class="fas fa-tasks"></i>
+                            <div>
+                                <h4>Select Sensor Columns</h4>
+                                <p>Choose the columns to use as features for the model.</p>
+                            </div>
+                        </div>
+                        <div id="columnCheckboxesTrain" class="checkbox-grid"></div>
+                    </div>
+
+                    <!-- Step 3: Configure Sensors -->
+                    <div class="form-step" id="trainFormStep3" style="display: none;">
+                         <div class="step-header">
+                            <i class="fas fa-edit"></i>
+                            <div>
+                                <h4>Configure Sensor Details</h4>
+                                <p>Provide user-friendly names and units for each sensor.</p>
+                            </div>
+                        </div>
+                        <div class="form-section">
+                            <h3>Sensor Details</h3>
+                            <div id="sensorConfigContainerTrain" class="sensor-config-list"></div>
+                        </div>
+                    </div>
+
+                    <!-- Step 4: Training Progress -->
+                    <div class="form-step" id="trainFormStep4" style="display: none;">
+                        <div class="step-header">
+                            <i class="fas fa-cogs fa-spin"></i>
+                            <div>
+                                <h4>Training in Progress...</h4>
+                                <p>Please keep this window open. The model is being trained.</p>
+                            </div>
+                        </div>
+                        <div class="training-progress-view">
+                             <div id="modalProgressContainerTrain" class="progress-bar-container">
+                                <div id="modalProgressBarTrain" class="progress-bar" style="width: 0%;"></div>
+                            </div>
+                            <p id="modalProgressLabelTrain" class="status-details-text">Initializing...</p>
+                            <button type="button" class="btn btn-primary" id="finishTrainBtn" style="display: none; margin-top: 1rem;">Finish</button>
+                        </div>
+                    </div>
+
+                    <!-- Navigation -->
+                    <div class="form-actions">
+                        <button type="button" id="prevTrainBtn" class="btn btn-secondary" style="display: none;">Previous</button>
+                        <button type="button" id="nextTrainBtn" class="btn btn-primary">Next</button>
+                        <button type="submit" id="submitTrainBtn" class="btn btn-primary" style="display: none;">Start Training</button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
 

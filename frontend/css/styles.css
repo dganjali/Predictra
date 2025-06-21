@@ -2127,4 +2127,103 @@ a:hover {
 
 .training-progress-view .progress-bar-container {
     margin: 1rem 0;
+}
+
+.close-btn {
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #aaa;
+    line-height: 1;
+}
+
+.close-btn:hover {
+    color: #333;
+}
+
+.details-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+}
+
+.details-section {
+    background-color: #f9f9f9;
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px solid #eee;
+}
+
+.details-section.full-width {
+    grid-column: 1 / -1;
+}
+
+.details-section h3 {
+    margin-top: 0;
+    font-size: 1.1rem;
+    color: #333;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.details-section h3 i {
+    margin-right: 0.5rem;
+    color: var(--primary-color);
+}
+
+.details-subsection {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+.detail-pair {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 0.75rem;
+}
+
+.detail-pair .label {
+    font-weight: 600;
+    color: #555;
+    margin-bottom: 0.25rem;
+    font-size: 0.9rem;
+}
+
+.detail-pair .value {
+    color: #333;
+}
+
+.not-available {
+    color: #999;
+    font-style: italic;
+}
+
+.details-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+}
+
+.details-table th, .details-table td {
+    padding: 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid #eee;
+}
+
+.details-table th {
+    background-color: #f2f2f2;
+    font-weight: 600;
+}
+
+/* Specific badge colors for training status */
+.status-badge.completed { background-color: #28a745; }
+.status-badge.in_progress { background-color: #007bff; }
+.status-badge.failed { background-color: #dc3545; }
+.status-badge.pending { background-color: #ffc107; color: #212529; }
+.status-badge.none { background-color: #6c757d; }
+
+.btn-group {
+    display: flex;
+    gap: 10px;
 } 
