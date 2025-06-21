@@ -228,9 +228,7 @@ function initAddMachineModal() {
     if (!modal) return;
 
     const form = document.getElementById('addMachineForm');
-    const cancelBtn = document.getElementById('cancelAddMachine');
     const closeModalBtn = document.getElementById('closeModal');
-    
     const nextBtn = document.getElementById('nextBtn');
     const prevBtn = document.getElementById('prevBtn');
     const submitBtn = document.getElementById('submitBtn');
@@ -247,10 +245,8 @@ function initAddMachineModal() {
     const closeModal = () => {
         modal.classList.remove('show');
         form.reset();
-        // Reset steps to initial state
         currentStep = 0;
         updateFormSteps();
-        // Clear dynamic content
         document.getElementById('columnCheckboxes').innerHTML = '';
         document.getElementById('sensorConfigContainer').innerHTML = '';
     };
@@ -266,7 +262,7 @@ function initAddMachineModal() {
     nextBtn.addEventListener('click', () => {
         if (validateStep(currentStep)) {
             currentStep++;
-            if (currentStep === 2) { // Moving to step 3
+            if (currentStep === 2) {
                 generateSensorConfigUI();
             }
             updateFormSteps();
@@ -313,22 +309,15 @@ function initAddMachineModal() {
         const selectedColumns = [...document.querySelectorAll('input[name="columns"]:checked')].map(cb => cb.value);
         const sensorConfigContainer = document.getElementById('sensorConfigContainer');
         sensorConfigContainer.innerHTML = '';
-
-        // Exclude id/timestamp from config UI
         const idTsSynonyms = ['id', 'timestamp', 'timestamps', 'time_stamp'];
         const sensorsToConfigure = selectedColumns.filter(c => !idTsSynonyms.includes(c.toLowerCase()));
-
         sensorsToConfigure.forEach(column => {
             const item = document.createElement('div');
             item.classList.add('sensor-config-item');
             item.innerHTML = `
                 <label>${column}</label>
-                <div class="form-group">
-                    <input type="text" name="sensor_display_${column}" placeholder="Display Name" required class="form-control" value="${column}">
-                </div>
-                <div class="form-group">
-                    <input type="text" name="sensor_unit_${column}" placeholder="Unit (e.g., °C, kPa)" required class="form-control">
-                </div>
+                <div class="form-group"><input type="text" name="sensor_display_${column}" placeholder="Display Name" required class="form-control" value="${column}"></div>
+                <div class="form-group"><input type="text" name="sensor_unit_${column}" placeholder="Unit (e.g., °C, kPa)" required class="form-control"></div>
             `;
             sensorConfigContainer.appendChild(item);
         });
@@ -336,113 +325,101 @@ function initAddMachineModal() {
 
     const csvFileInput = document.getElementById('csvFile');
     const columnCheckboxesContainer = document.getElementById('columnCheckboxes');
+    let originalCsvHeaders = [];
+    const idTsSynonyms = ['id', 'timestamp', 'timestamps', 'time_stamp'];
 
     csvFileInput.addEventListener('change', (event) => {
         const file = event.target.files[0];
-        if (!file) {
-            return;
-        }
-
+        if (!file) { return; }
         Papa.parse(file, {
-            header: true,
-            skipEmptyLines: true,
-            preview: 1,
+            header: true, skipEmptyLines: true, preview: 1,
             complete: (results) => {
-                const headers = results.meta.fields;
+                originalCsvHeaders = results.meta.fields;
                 columnCheckboxesContainer.innerHTML = ''; 
+                
+                const displayHeaders = originalCsvHeaders.filter(h => !idTsSynonyms.includes(h.toLowerCase()));
 
-                headers.forEach(header => {
-                    const isRequired = header.toLowerCase() === 'id' || header.toLowerCase() === 'timestamp' || header.toLowerCase() === 'timestamps';
-                    
+                displayHeaders.forEach(header => {
                     const checkboxDiv = document.createElement('div');
                     checkboxDiv.classList.add('checkbox-item');
-
+                    
                     const checkbox = document.createElement('input');
                     checkbox.type = 'checkbox';
                     checkbox.id = `col-${header}`;
                     checkbox.name = 'columns';
                     checkbox.value = header;
-                    checkbox.checked = isRequired;
-                    checkbox.disabled = isRequired;
-
+                    checkbox.checked = true; // Select all feature columns by default
+                    checkboxDiv.classList.add('selected');
+                    
+                    checkbox.addEventListener('change', () => checkboxDiv.classList.toggle('selected', checkbox.checked));
+                    
                     const label = document.createElement('label');
                     label.htmlFor = `col-${header}`;
                     label.textContent = header;
-
+                    
                     checkboxDiv.appendChild(checkbox);
                     checkboxDiv.appendChild(label);
                     columnCheckboxesContainer.appendChild(checkboxDiv);
                 });
             },
-            error: (error) => {
-                console.error('Error parsing CSV:', error);
-                alert('Error parsing CSV file. Please check the file format.');
-            }
+            error: (err) => { console.error('Error parsing CSV:', err); alert('Error parsing CSV file.'); }
         });
     });
 
-    form.addEventListener('submit', handleAddMachine);
-
     async function handleAddMachine(e) {
         e.preventDefault();
-        
-        if (!validateStep(2)) return; // Validate final step before submitting
+        if (!validateStep(2)) return;
 
         const form = e.target;
         const formData = new FormData(form);
         const token = localStorage.getItem('token');
         
-        // Collect sensor configuration
-        const sensors = [];
-        const selectedColumns = [...document.querySelectorAll('input[name="columns"]:checked')].map(cb => cb.value);
-        const idTsSynonyms = ['id', 'timestamp', 'timestamps', 'time_stamp'];
-        const sensorsToConfigure = selectedColumns.filter(c => !idTsSynonyms.includes(c.toLowerCase()));
+        // --- Assemble form data ---
+        // 1. Get user-selected feature columns
+        const featureColumns = [...document.querySelectorAll('input[name="columns"]:checked')].map(cb => cb.value);
+
+        // 2. Find required ID and Timestamp columns from original headers
+        const requiredColumns = originalCsvHeaders.filter(h => idTsSynonyms.includes(h.toLowerCase()));
+
+        // 3. Combine for the 'columns' field for the backend
+        const allColumns = [...new Set([...featureColumns, ...requiredColumns])];
+        formData.append('columns', JSON.stringify(allColumns));
         
-        sensorsToConfigure.forEach(column => {
+        // 4. Collect sensor configuration for feature columns only
+        const sensors = [];
+        featureColumns.forEach(column => {
             sensors.push({
                 sensorId: column,
                 name: formData.get(`sensor_display_${column}`),
                 unit: formData.get(`sensor_unit_${column}`)
             });
         });
-
         formData.append('sensors', JSON.stringify(sensors));
         
-        const submitButton = form.querySelector('#submitBtn');
-        submitButton.disabled = true;
-        submitButton.textContent = 'Processing...';
+        const submitBtn = form.querySelector('#submitBtn');
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Processing...';
         
         try {
-            const response = await fetch('/api/dashboard/machines', {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` },
-                body: formData,
-            });
-
+            const response = await fetch('/api/dashboard/machines', { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: formData });
             const data = await response.json();
-
             if (!data.success) {
                 showMessage(data.message, 'error');
                 return;
             }
-
             showMessage('Machine added and training started!', 'success');
-            
-            document.getElementById('addMachineModal').classList.remove('show');
-            form.reset();
-            // Manually trigger close logic to reset steps
             closeModal();
-
             loadDashboardData();
-
         } catch (error) {
             console.error('Error adding machine:', error);
             showMessage('Error adding machine. Please try again.', 'error');
         } finally {
-            submitButton.disabled = false;
-            submitButton.textContent = 'Add Machine & Train';
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Add Machine & Train';
         }
     }
+
+    form.addEventListener('submit', handleAddMachine);
 }
 
 function showMessage(message, type = 'info') {

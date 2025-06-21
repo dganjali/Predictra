@@ -39,7 +39,7 @@ def create_sequences(data, sequence_len=SEQUENCE_LEN):
         sequences.append(data[i : (i + sequence_len)])
     return np.array(sequences)
 
-def run_training_pipeline(user_id: str, machine_id: str, data_path: str, sensor_columns: List[str]):
+def run_training_pipeline(user_id: str, machine_id: str, data_path: str, sensor_columns: List[str], row_limit: int = None):
     """
     Executes the end-to-end training pipeline. It handles its own errors and
     communicates all progress and outcomes via stdout as JSON strings.
@@ -47,7 +47,10 @@ def run_training_pipeline(user_id: str, machine_id: str, data_path: str, sensor_
     paths = get_model_paths(user_id, machine_id)
     try:
         # STAGE 1: Data Loading & Validation
-        print(json.dumps({"type": "progress", "progress": 10, "message": "Loading data..."}), flush=True)
+        progress_msg = "Loading data..."
+        if row_limit:
+            progress_msg = f"Loading first {row_limit} rows..."
+        print(json.dumps({"type": "progress", "progress": 10, "message": progress_msg}), flush=True)
         
         # Determine the CSV delimiter and ensure the timestamp column is loaded
         with open(data_path, 'r', errors='ignore') as f:
@@ -55,7 +58,7 @@ def run_training_pipeline(user_id: str, machine_id: str, data_path: str, sensor_
         
         required_cols = list(set(sensor_columns + ['time_stamp']))
         df = pd.read_csv(data_path, sep=delimiter, usecols=required_cols, 
-                         parse_dates=['time_stamp'], index_col='time_stamp')
+                         parse_dates=['time_stamp'], index_col='time_stamp', nrows=row_limit)
 
         # STAGE 2: Data Preprocessing
         print(json.dumps({"type": "progress", "progress": 25, "message": "Preprocessing data..."}), flush=True)
@@ -111,16 +114,24 @@ def run_training_pipeline(user_id: str, machine_id: str, data_path: str, sensor_
             os.remove(data_path)
 
 if __name__ == "__main__":
-    if len(sys.argv) != 6:
+    if len(sys.argv) not in [6, 7]:
         # This error prints to stderr and will be caught by the Node.js process.
-        print(f"FATAL: Incorrect number of arguments. Expected 5, got {len(sys.argv)-1}", file=sys.stderr)
+        print(f"FATAL: Incorrect number of arguments. Expected 5 or 6, got {len(sys.argv)-1}", file=sys.stderr)
         sys.exit(1)
         
-    _, mode, user_id, machine_id, file_path, sensor_names_str = sys.argv
-    
+    row_limit = None
+    if len(sys.argv) == 7:
+        _, mode, user_id, machine_id, file_path, sensor_names_str, row_limit_str = sys.argv
+        try:
+            row_limit = int(row_limit_str)
+        except (ValueError, TypeError):
+            row_limit = None # Ignore if not a valid integer
+    else:
+        _, mode, user_id, machine_id, file_path, sensor_names_str = sys.argv
+
     if mode == 'train':
         sensors = [s.strip() for s in sensor_names_str.split(',')]
-        run_training_pipeline(user_id, machine_id, file_path, sensors)
+        run_training_pipeline(user_id, machine_id, file_path, sensors, row_limit)
     else:
         print(f"FATAL: Unknown mode '{mode}'", file=sys.stderr)
         sys.exit(1) 

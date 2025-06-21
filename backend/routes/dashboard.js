@@ -207,14 +207,14 @@ router.post('/machines', auth, upload.single('csvFile'), async (req, res) => {
         const newMachine = new Machine({
             ...machineData,
             userId: user._id,
-            sensors: [],
+            sensors: JSON.parse(machineData.sensors || '[]'),
+            training_columns: JSON.parse(machineData.columns || '[]'),
             modelStatus: 'untrained',
             statusDetails: 'Machine added. Ready for data connection.'
         });
 
         if (req.file) {
             newMachine.training_data_path = req.file.path;
-            newMachine.training_columns = JSON.parse(machineData.columns || '[]');
             newMachine.training_status = 'pending';
         }
 
@@ -242,6 +242,7 @@ async function trainModel(machine, user) {
     const userId = user._id.toString();
     const filePath = machine.training_data_path;
     let columns = machine.training_columns;
+    const TRAINING_ROW_LIMIT = 20000;
 
     try {
         await Machine.findByIdAndUpdate(machineId, { training_status: 'in_progress' });
@@ -278,7 +279,8 @@ async function trainModel(machine, user) {
             userId,
             machineId,
             filePath,
-            columns.join(',')
+            columns.join(','),
+            TRAINING_ROW_LIMIT.toString()
         ]);
 
         let lastJsonOutput = '';
