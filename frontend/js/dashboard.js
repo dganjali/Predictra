@@ -562,19 +562,23 @@ function displayDashboardData(data) {
 
 function displayMachines(machines) {
     const machineList = document.getElementById('machineList');
-    const noMachinesDiv = document.querySelector('.no-machines');
 
     if (!machines || machines.length === 0) {
-        machineList.innerHTML = ''; // Clear any existing cards
-        if (noMachinesDiv) {
-            noMachinesDiv.style.display = 'flex';
-            machineList.appendChild(noMachinesDiv);
-        }
+        machineList.innerHTML = `
+            <div class="no-machines">
+                <i class="fas fa-server"></i>
+                <h3>No Machines Found</h3>
+                <p>Get started by adding your first piece of equipment to monitor.</p>
+                <button class="btn btn-primary" id="addFirstMachineBtn">
+                    <i class="fas fa-plus"></i> Add Machine
+                </button>
+            </div>
+        `;
+        document.getElementById('addFirstMachineBtn').addEventListener('click', () => {
+            const modal = document.getElementById('addMachineModal');
+            if (modal) modal.classList.add('show');
+        });
         return;
-    }
-
-    if (noMachinesDiv) {
-        noMachinesDiv.style.display = 'none';
     }
     
     machineList.innerHTML = machines.map(machine => {

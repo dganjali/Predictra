@@ -1870,4 +1870,42 @@ a:hover {
 /* Form Styles */
 .form-section {
     margin-bottom: 2rem;
+}
+
+/* Form Progress */
+.form-progress {
+    margin-top: 1.5rem;
+    padding: 1rem;
+    background-color: var(--bg-tertiary);
+    border-radius: var(--radius-md);
+    text-align: center;
+}
+
+.progress-bar-container {
+    background-color: var(--bg-primary);
+    border-radius: var(--radius-full);
+    height: 12px;
+    margin-top: 0.75rem;
+    overflow: hidden;
+    width: 100%;
+    border: 1px solid var(--border-color);
+}
+
+.progress-bar {
+    background-color: var(--primary-color);
+    height: 100%;
+    text-align: center;
+    color: white;
+    line-height: 12px;
+    transition: width 0.3s ease-in-out;
+    border-radius: var(--radius-full);
+}
+
+#uploadProgressText,
+#csvLoadProgressText {
+    display: block;
+    margin-top: 0.5rem;
+    font-weight: 500;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
 } 
