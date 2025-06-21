@@ -194,9 +194,12 @@ function initMachineManagement() {
             const action = button.dataset.action;
             const id = button.dataset.id;
 
+            console.log('Button clicked:', { action, id, button: button.textContent.trim() });
+
             if (action === 'view-details') {
                 viewMachineDetails(id);
             } else if (action === 'calculate-risk') {
+                console.log('Calculate Risk button clicked for machine:', id);
                 openPredictionModal(id);
             } else if (action === 'train-model') {
                 openTrainModal(id);
@@ -624,7 +627,9 @@ function displayMachines(machines) {
 
         const statusColor = getStatusColor(status);
         const lastUpdatedFormatted = lastUpdated ? new Date(lastUpdated).toLocaleString() : 'N/A';
-        const isTrained = modelStatus === 'trained';
+        const isTrained = modelStatus === 'trained' || 
+                         training_status === 'completed' ||
+                         (machine.model_params && machine.model_params.source === 'pre_trained_model');
         
         let statusContent;
         if (training_status === 'in_progress' || training_status === 'pending') {
@@ -943,6 +948,7 @@ function openPredictionModal(machineId) {
     const machine = allMachines.find(m => m._id === machineId);
     if (!machine) {
         console.log('Machine not found in allMachines array');
+        console.log('Available machines:', allMachines.map(m => ({ id: m._id, name: m.machineName })));
         showMessage('Could not find machine details.', 'error');
         return;
     }
@@ -950,9 +956,17 @@ function openPredictionModal(machineId) {
     console.log('Machine found:', machine);
     console.log('Machine sensors:', machine.sensors);
     console.log('Machine modelStatus:', machine.modelStatus);
+    console.log('Machine training_status:', machine.training_status);
 
-    // Check if machine is trained
-    if (machine.modelStatus !== 'trained') {
+    // Check if machine is trained - check multiple possible status fields
+    const isTrained = machine.modelStatus === 'trained' || 
+                     machine.training_status === 'completed' ||
+                     (machine.model_params && machine.model_params.source === 'pre_trained_model');
+    
+    console.log('Is machine trained?', isTrained);
+    console.log('Model params:', machine.model_params);
+
+    if (!isTrained) {
         console.log('Machine model is not trained');
         showMessage('This machine model is not trained yet. Please train the model first.', 'error');
         return;
@@ -962,6 +976,12 @@ function openPredictionModal(machineId) {
     const formBody = document.getElementById('predictionFormBody');
     const modal = document.getElementById('predictionModal');
     const resultContainer = document.getElementById('predictionResult');
+
+    if (!modal || !formBody || !modalTitle) {
+        console.error('Required modal elements not found');
+        showMessage('Error: Modal elements not found.', 'error');
+        return;
+    }
 
     modalTitle.textContent = `Calculate Risk for ${machine.machineName}`;
     resultContainer.style.display = 'none';
@@ -980,6 +1000,7 @@ function openPredictionModal(machineId) {
     }
 
     modal.classList.add('show');
+    console.log('Prediction modal opened successfully');
 }
 
 async function handlePrediction(e) {
