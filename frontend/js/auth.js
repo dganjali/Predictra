@@ -121,10 +121,8 @@ function initSignIn(form) {
                     window.authUtils.showMessage('Sign in successful! Redirecting...', 'success');
                 }
                 
-                // Redirect to dashboard
-                setTimeout(() => {
-                    window.location.href = '/dashboard';
-                }, 500);
+                // Redirect to dashboard immediately
+                window.location.href = '/dashboard';
             } else {
                 // Show error message
                 showError('email', data.message || 'Sign in failed');
@@ -212,10 +210,8 @@ function initSignUp(form) {
                     window.authUtils.showMessage('Account created successfully! Redirecting...', 'success');
                 }
                 
-                // Redirect to dashboard
-                setTimeout(() => {
-                    window.location.href = '/dashboard';
-                }, 500);
+                // Redirect to dashboard immediately
+                window.location.href = '/dashboard';
             } else {
                 // Handle validation errors
                 if (data.errors && Array.isArray(data.errors)) {

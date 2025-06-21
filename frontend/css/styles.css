@@ -205,6 +205,8 @@ a:hover {
     transition: all 0.2s ease;
     font-size: 1rem;
     line-height: 1;
+    min-width: 120px;
+    justify-content: center;
 }
 
 .btn-primary {
@@ -1158,6 +1160,11 @@ a:hover {
 /* Loading States */
 .btn-loading {
     display: none;
+    align-items: center;
+    gap: 0.5rem;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.2s ease;
 }
 
 .btn.loading .btn-text {
@@ -1166,6 +1173,13 @@ a:hover {
 
 .btn.loading .btn-loading {
     display: inline-flex;
+    opacity: 1;
+}
+
+/* Ensure button maintains size during loading */
+.btn.loading {
+    min-width: fit-content;
+    justify-content: center;
 }
 
 /* Success/Error Messages */
