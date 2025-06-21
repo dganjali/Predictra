@@ -225,9 +225,10 @@ router.post('/machine/:machineId/train', auth, upload.single('csvFile'), async (
         const { sensors, columns } = req.body;
         const user = req.user;
 
-        if (!req.file) {
-            return res.status(400).json({ success: false, message: 'Training data file is required.' });
-        }
+        // Remove the requirement for CSV file since we're using pre-trained parameters
+        // if (!req.file) {
+        //     return res.status(400).json({ success: false, message: 'Training data file is required.' });
+        // }
         
         const machine = await Machine.findOne({ _id: machineId, userId: user._id });
         if (!machine) {
@@ -237,7 +238,9 @@ router.post('/machine/:machineId/train', auth, upload.single('csvFile'), async (
         // Update machine with new training info
         machine.sensors = JSON.parse(sensors || '[]');
         machine.training_columns = JSON.parse(columns || '[]');
-        machine.training_data_path = req.file.path;
+        if (req.file) {
+            machine.training_data_path = req.file.path;
+        }
         machine.training_status = 'pending'; // Set to pending to kick off polling
         
         await machine.save();
@@ -427,14 +430,15 @@ router.post('/machine/:id/predict', auth, async (req, res) => {
         }
 
         // --- Data Validation and Ordering ---
-        const modelDir = path.join(__dirname, '..', 'models', 'user_models', `user_${req.user._id.toString()}`, `machine_${machine._id.toString()}`);
-        const columnsFilePath = path.join(modelDir, 'columns.json'); // Fixed: should be columns.json not model_columns.json
-
-        if (!fs.existsSync(columnsFilePath)) {
-            return res.status(500).json({ success: false, message: 'Model configuration (columns.json) not found. Please retrain the model.' });
+        // Use pre-trained model files instead of machine-specific files
+        const pretrainedConfigPath = path.join(__dirname, '../models/pretrained_config.json');
+        if (!fs.existsSync(pretrainedConfigPath)) {
+            return res.status(500).json({ success: false, message: 'Pre-trained model configuration not found.' });
         }
-
-        const expectedColumns = JSON.parse(fs.readFileSync(columnsFilePath, 'utf-8'));
+        
+        const pretrainedConfig = JSON.parse(fs.readFileSync(pretrainedConfigPath, 'utf8'));
+        const pretrained = pretrainedConfig.pretrained_model;
+        const expectedColumns = pretrained.trained_columns;
         
         // Map sensor data to the expected column names
         // The sensorData keys are the sensorIds from the frontend form
@@ -446,7 +450,7 @@ router.post('/machine/:id/predict', auth, async (req, res) => {
             }
         }
         
-        // Order the data according to the trained model's expected column order
+        // Order the data according to the pre-trained model's expected column order
         const orderedSensorData = expectedColumns.map(column => mappedSensorData[column]);
 
         if (orderedSensorData.some(v => v === undefined)) {
@@ -471,8 +475,8 @@ router.post('/machine/:id/predict', auth, async (req, res) => {
         const pythonProcess = spawn('python3', [
             pythonScriptPath, 
             'predict',
-            req.user._id.toString(), 
-            machine._id.toString(), 
+            'test_user', // Use test_user for pre-trained model
+            'test_machine', // Use test_machine for pre-trained model
             sequenceFilePath
         ]);
 

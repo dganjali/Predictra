@@ -407,9 +407,6 @@ function initTrainMachineModal() {
         e.preventDefault();
         if (!validateStep(2) || !currentTrainMachineId) return;
 
-        currentStep = 3;
-        updateFormSteps();
-        
         const formData = new FormData(form);
         const featureColumns = [...modal.querySelectorAll('input[name="columns"]:checked')].map(cb => cb.value);
         const requiredColumns = originalCsvHeaders.filter(h => idTsSynonyms.includes(h.toLowerCase()));
@@ -429,6 +426,7 @@ function initTrainMachineModal() {
         formData.append('sensors', JSON.stringify(sensors));
 
         try {
+            // Save sensor configuration and apply pre-trained parameters
             const response = await fetch(`/api/dashboard/machine/${currentTrainMachineId}/train`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
@@ -437,13 +435,14 @@ function initTrainMachineModal() {
             const data = await response.json();
             if (!data.success) {
                 showMessage(`Error: ${data.message}`, 'error');
-                currentStep = 2; updateFormSteps();
             } else {
-                startTrainPolling(currentTrainMachineId);
+                // Close modal and refresh dashboard
+                closeModal();
+                loadDashboardData();
+                showMessage('Sensor configuration saved and pre-trained model applied!', 'success');
             }
         } catch (error) {
-            showMessage('Network error. Could not start training.', 'error');
-            currentStep = 2; updateFormSteps();
+            showMessage('Network error. Could not save configuration.', 'error');
         }
     });
 }
