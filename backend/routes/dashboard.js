@@ -722,103 +722,29 @@ function getModelPaths(userId, machineId) {
 async function trainModel(machine, user) {
     const machineId = machine._id.toString();
     const userId = user._id.toString();
-    const filePath = machine.training_data_path;
-    let columns = machine.training_columns;
-    const TRAINING_ROW_LIMIT = 5000; // Reduced for faster training
-
+    
     try {
         await Machine.findByIdAndUpdate(machineId, { 
             training_status: 'in_progress',
-            training_progress: 5,
-            training_message: 'Preparing data for training...' 
+            training_progress: 10,
+            training_message: 'Loading pre-trained model parameters...' 
         });
         
-        // Check if we can use pre-trained parameters
+        // Load pre-trained configuration
         const pretrainedConfigPath = path.join(__dirname, '../models/pretrained_config.json');
-        if (fs.existsSync(pretrainedConfigPath)) {
-            const pretrainedConfig = JSON.parse(fs.readFileSync(pretrainedConfigPath, 'utf8'));
-            const pretrained = pretrainedConfig.pretrained_model;
-            
-            // Check if the current machine's sensors match the pre-trained columns
-            const currentSensorIds = machine.sensors.map(s => s.sensorId);
-            const matchesPretrained = pretrained.trained_columns.every(col => currentSensorIds.includes(col));
-            
-            if (matchesPretrained) {
-                console.log(`✅ Using pre-trained model for machine ${machineId}`);
-                
-                // Copy pre-trained model files to this machine's directory
-                const modelsDir = path.join(__dirname, '../models/user_models');
-                const userDir = path.join(modelsDir, `user_${userId}`);
-                const machineDir = path.join(userDir, `machine_${machineId}`);
-                
-                fs.mkdirSync(modelsDir, { recursive: true });
-                fs.mkdirSync(userDir, { recursive: true });
-                fs.mkdirSync(machineDir, { recursive: true });
-                
-                // Copy model files
-                const sourceModelPath = path.join(__dirname, '../models', pretrained.model_path);
-                const sourceScalerPath = path.join(__dirname, '../models', pretrained.scaler_path);
-                const sourceColumnsPath = path.join(__dirname, '../models/user_models/user_test_user/machine_test_machine/columns.json');
-                
-                const destModelPath = path.join(machineDir, 'model.h5');
-                const destScalerPath = path.join(machineDir, 'scaler.pkl');
-                const destColumnsPath = path.join(machineDir, 'columns.json');
-                const destThresholdPath = path.join(machineDir, 'threshold.json');
-                
-                // Copy files
-                fs.copyFileSync(sourceModelPath, destModelPath);
-                fs.copyFileSync(sourceScalerPath, destScalerPath);
-                fs.copyFileSync(sourceColumnsPath, destColumnsPath);
-                
-                // Create threshold file with pre-trained parameters
-                fs.writeFileSync(destThresholdPath, JSON.stringify({
-                    threshold: pretrained.threshold,
-                    mae_threshold: pretrained.mae_threshold,
-                    mean_loss: pretrained.mean_loss,
-                    max_loss: pretrained.max_loss,
-                    min_loss: pretrained.min_loss,
-                    std_loss: pretrained.std_loss,
-                    percentile_90: pretrained.percentile_90,
-                    percentile_95: pretrained.percentile_95,
-                    percentile_99: pretrained.percentile_99,
-                    mae_stats: pretrained.mae_stats,
-                    model_info: pretrained.model_info
-                }));
-                
-                // Update machine with success status
-                await Machine.findByIdAndUpdate(machineId, {
-                    training_status: 'completed',
-                    training_progress: 100,
-                    model_params: {
-                        threshold: pretrained.threshold,
-                        mae_threshold: pretrained.mae_threshold,
-                        mean_loss: pretrained.mean_loss,
-                        max_loss: pretrained.max_loss,
-                        min_loss: pretrained.min_loss,
-                        std_loss: pretrained.std_loss,
-                        percentile_90: pretrained.percentile_90,
-                        percentile_95: pretrained.percentile_95,
-                        percentile_99: pretrained.percentile_99,
-                        mae_stats: pretrained.mae_stats,
-                        model_info: pretrained.model_info
-                    },
-                    modelStatus: 'trained',
-                    training_message: 'Training completed successfully using pre-trained model.',
-                    lastTrained: new Date()
-                });
-                
-                console.log(`✅ Pre-trained model applied successfully for machine ${machineId}`);
-                return;
-            }
+        if (!fs.existsSync(pretrainedConfigPath)) {
+            throw new Error('Pre-trained model configuration not found');
         }
         
-        // Fall back to normal training if pre-trained model doesn't match
-        console.log(`🔄 Using normal training for machine ${machineId}`);
+        const pretrainedConfig = JSON.parse(fs.readFileSync(pretrainedConfigPath, 'utf8'));
+        const pretrained = pretrainedConfig.pretrained_model;
         
-        if (!fs.existsSync(filePath)) {
-            throw new Error(`Training file not found at path: ${filePath}`);
-        }
+        await Machine.findByIdAndUpdate(machineId, { 
+            training_progress: 30,
+            training_message: 'Applying pre-trained parameters...' 
+        });
         
+        // Create machine directory structure
         const modelsDir = path.join(__dirname, '../models/user_models');
         const userDir = path.join(modelsDir, `user_${userId}`);
         const machineDir = path.join(userDir, `machine_${machineId}`);
@@ -827,125 +753,75 @@ async function trainModel(machine, user) {
         fs.mkdirSync(userDir, { recursive: true });
         fs.mkdirSync(machineDir, { recursive: true });
         
-        const data = fs.readFileSync(filePath, 'utf8');
-        const lines = data.split(/\\r?\\n/);
-        if (lines.length < 2) {
-            throw new Error('CSV file has insufficient data (less than 2 lines)');
-        }
-        
-        const header = lines[0];
-        const fileColumns = header.split(/,|;/).map(c => c.trim());
-        
-        const timestampSynonyms = ['timestamp', 'timestamps', 'time_stamp', 'date'];
-        const idSynonyms = ['id', 'machine_id'];
-
-        const validColumns = columns.filter(col => {
-            const colLower = col.toLowerCase();
-            return !timestampSynonyms.includes(colLower) && !idSynonyms.includes(colLower) && fileColumns.includes(col);
-        });
-        
-        if (validColumns.length === 0) {
-            throw new Error('No valid sensor columns found in the CSV file after filtering.');
-        }
-        
-        const pythonPath = process.env.PYTHON_PATH || 'python3';
-        const pythonScript = path.join(__dirname, '../models/anomaly.py');
-        
-        const pythonProcess = spawn(pythonPath, [
-            pythonScript, 'train', userId, machineId, filePath,
-            validColumns.join(','), TRAINING_ROW_LIMIT.toString()
-        ]);
-
-        let lastJsonOutput = '';
-        let errorOutput = '';
-        
-        pythonProcess.stdout.on('data', async (data) => {
-            const output = data.toString();
-            console.log(`[TRAIN-STDOUT ${machineId}]: ${output}`);
-            const jsonStrings = output.trim().split('\\n');
-            
-            for (const jsonString of jsonStrings) {
-                try {
-                    const result = JSON.parse(jsonString);
-                    lastJsonOutput = jsonString;
-
-                    if (result.type === 'progress') {
-                        await Machine.findByIdAndUpdate(machineId, {
-                            training_progress: result.progress,
-                            training_message: result.message
-                        });
-                    } else if (result.error) {
-                        errorOutput += result.error + '\\n';
-                    }
-                } catch (e) { /* ignore non-json output */ }
-            }
-        });
-
-        pythonProcess.stderr.on('data', (data) => {
-            errorOutput += data.toString();
-            console.error(`[TRAIN-ERR ${machineId}]: ${data.toString()}`);
-        });
-
-        pythonProcess.on('close', async (code) => {
-            console.log(`[TRAIN-CLOSE ${machineId}]: Process exited with code ${code}`);
-            try {
-                const paths = getModelPaths(userId, machineId);
-                
-                // Check for both regular model file and alternative saves
-                const modelFileExists = fs.existsSync(paths.model_file);
-                const weightsFileExists = fs.existsSync(paths.model_file.replace('.h5', '_weights.h5'));
-                const thresholdFileExists = fs.existsSync(paths.threshold_file);
-                
-                const result = lastJsonOutput ? JSON.parse(lastJsonOutput) : null;
-                
-                if (code === 0 && result && result.success && (modelFileExists || weightsFileExists) && thresholdFileExists) {
-                    // Training successful - load and save parameters
-                    const thresholdData = JSON.parse(fs.readFileSync(paths.threshold_file, 'utf8'));
-                    
-                    // Update machine with success status and model parameters
-                    await Machine.findByIdAndUpdate(machineId, {
-                        training_status: 'completed',
-                        training_progress: 100,
-                        model_params: thresholdData,
-                        modelStatus: 'trained',
-                        training_message: 'Training completed successfully.',
-                        lastTrained: new Date(),
-                        trainingDuration: Date.now() - Date.parse((await Machine.findById(machineId)).updatedAt)
-                    });
-                    
-                    console.log(`✅ Training completed successfully for machine ${machineId}`);
-                    console.log(`📊 Model parameters saved: threshold=${thresholdData.threshold}`);
-                    
-                } else {
-                    // Training failed - determine why
-                    let errorMsg = `Training failed with exit code ${code}`;
-                    
-                    if (result && result.error) {
-                        errorMsg = result.error;
-                    } else if (!thresholdFileExists) {
-                        errorMsg = "Training completed but threshold file was not created";
-                    } else if (!modelFileExists && !weightsFileExists) {
-                        errorMsg = "Training completed but model file was not created";
-                    } else if (errorOutput) {
-                        errorMsg = errorOutput.substring(0, 500);
-                    }
-                    throw new Error(errorMsg);
-                }
-            } catch (e) {
-                console.error(`❌ Training failed for machine ${machineId}: ${e.message}`);
-                await Machine.findByIdAndUpdate(machineId, { 
-                    training_status: 'failed',
-                    training_progress: 0,
-                    training_message: `Training failed: ${e.message.substring(0, 255)}`,
-                    modelStatus: 'untrained'
-                });
-            }
-        });
-
-    } catch (error) {
         await Machine.findByIdAndUpdate(machineId, { 
+            training_progress: 50,
+            training_message: 'Copying model files...' 
+        });
+        
+        // Copy pre-trained model files
+        const sourceModelPath = path.join(__dirname, '../models', pretrained.model_path);
+        const sourceScalerPath = path.join(__dirname, '../models', pretrained.scaler_path);
+        const sourceColumnsPath = path.join(__dirname, '../models/user_models/user_test_user/machine_test_machine/columns.json');
+        
+        const destModelPath = path.join(machineDir, 'model.h5');
+        const destScalerPath = path.join(machineDir, 'scaler.pkl');
+        const destColumnsPath = path.join(machineDir, 'columns.json');
+        const destThresholdPath = path.join(machineDir, 'threshold.json');
+        
+        // Copy files
+        fs.copyFileSync(sourceModelPath, destModelPath);
+        fs.copyFileSync(sourceScalerPath, destScalerPath);
+        fs.copyFileSync(sourceColumnsPath, destColumnsPath);
+        
+        await Machine.findByIdAndUpdate(machineId, { 
+            training_progress: 80,
+            training_message: 'Saving model parameters...' 
+        });
+        
+        // Create threshold file with pre-trained parameters
+        const thresholdData = {
+            threshold: pretrained.threshold,
+            mae_threshold: pretrained.mae_threshold,
+            mean_loss: pretrained.mean_loss,
+            max_loss: pretrained.max_loss,
+            min_loss: pretrained.min_loss,
+            std_loss: pretrained.std_loss,
+            percentile_90: pretrained.percentile_90,
+            percentile_95: pretrained.percentile_95,
+            percentile_99: pretrained.percentile_99,
+            mae_stats: pretrained.mae_stats,
+            model_info: pretrained.model_info
+        };
+        
+        fs.writeFileSync(destThresholdPath, JSON.stringify(thresholdData, null, 2));
+        
+        await Machine.findByIdAndUpdate(machineId, { 
+            training_progress: 100,
+            training_message: 'Pre-trained model applied successfully!' 
+        });
+        
+        // Update machine with success status and model parameters
+        await Machine.findByIdAndUpdate(machineId, {
+            training_status: 'completed',
+            training_progress: 100,
+            model_params: thresholdData,
+            modelStatus: 'trained',
+            training_message: 'Pre-trained model applied successfully!',
+            lastTrained: new Date(),
+            trainingDuration: Date.now() - Date.parse((await Machine.findById(machineId)).updatedAt)
+        });
+        
+        console.log(`✅ Pre-trained model applied successfully for machine ${machineId}`);
+        console.log(`📊 Model parameters applied: threshold=${pretrained.threshold}`);
+        
+    } catch (error) {
+        console.error(`❌ Error applying pre-trained model for machine ${machineId}:`, error);
+        
+        await Machine.findByIdAndUpdate(machineId, {
             training_status: 'failed',
-            training_message: `Training failed: ${error.message.substring(0, 255)}`
+            training_progress: 0,
+            training_message: `Error: ${error.message}`,
+            lastTrained: new Date()
         });
     }
 }

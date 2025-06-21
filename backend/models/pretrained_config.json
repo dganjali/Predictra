@@ -1,31 +1,42 @@
 {
   "pretrained_model": {
     "source_data": "0.csv",
-    "threshold": 0.5496795535400301,
-    "mae_threshold": 0.4380322910653215,
-    "mean_loss": 0.15690033148616034,
-    "max_loss": 1.880045773618295,
-    "min_loss": 0.02134066585184069,
-    "std_loss": 0.20688766237801867,
-    "percentile_90": 0.32729549719863904,
-    "percentile_95": 0.5496795535400301,
-    "percentile_99": 1.2909307856237027,
+    "threshold": 1.0697027944728559,
+    "mae_threshold": 0.7625741984134864,
+    "mean_loss": 0.4070660718828024,
+    "max_loss": 3.1724275523038483,
+    "min_loss": 0.03865856958553848,
+    "std_loss": 0.3883061508141692,
+    "percentile_90": 0.7836960934788033,
+    "percentile_95": 1.0697027944728559,
+    "percentile_99": 2.1058350361530724,
     "mae_stats": {
-      "mean": 0.23945812591185814,
-      "percentile_95": 0.4380322910653215
+      "mean": 0.4518263444966047,
+      "percentile_95": 0.7625741984134864
     },
     "model_info": {
-      "lstm_units": 16,
+      "lstm_units": 20,
       "sequence_length": 5,
-      "n_features": 8,
+      "n_features": 10,
       "training_samples": 2996,
       "epochs_trained": 3,
       "batch_size": 64,
       "loss_function": "mse",
       "training_time": "optimized_fast_training"
     },
-    "trained_columns": ["sensor_44", "sensor_45", "sensor_46", "sensor_47", "sensor_48", "sensor_49", "sensor_50", "sensor_51"],
+    "trained_columns": [
+      "sensor_0_avg",
+      "sensor_1_avg",
+      "sensor_2_avg",
+      "sensor_5_avg",
+      "sensor_6_avg",
+      "sensor_7_avg",
+      "sensor_8_avg",
+      "sensor_9_avg",
+      "sensor_10_avg",
+      "sensor_11_avg"
+    ],
     "model_path": "user_models/user_test_user/machine_test_machine/model.h5",
     "scaler_path": "user_models/user_test_user/machine_test_machine/scaler.pkl"
   }
-} 
+}
