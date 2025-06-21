@@ -683,7 +683,7 @@ async function trainModel(machine, user) {
     const userId = user._id.toString();
     const filePath = machine.training_data_path;
     let columns = machine.training_columns;
-    const TRAINING_ROW_LIMIT = 20000;
+    const TRAINING_ROW_LIMIT = 10000;
 
     try {
         await Machine.findByIdAndUpdate(machineId, { 

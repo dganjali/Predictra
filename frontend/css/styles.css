@@ -1103,133 +1103,143 @@ a:hover {
 }
 
 .modal-content {
-    background: var(--bg-primary);
-    border-radius: var(--radius-lg);
-    padding: 0;
-    width: 95%;
+    background-color: #ffffff;
+    margin: 5% auto;
+    padding: 2.5rem;
+    border: none;
+    width: 90%;
+    max-width: 600px;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    position: relative;
+    animation: slide-down 0.3s ease-out;
+}
+
+.modal-content.large {
     max-width: 900px;
-    max-height: 90vh;
-    overflow-y: auto;
-    box-shadow: var(--shadow-xl);
-    border: 1px solid var(--border-color);
 }
 
 .modal-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 1.5rem;
-    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #e9ecef;
+    margin-bottom: 1.5rem;
 }
 
 .modal-header h2 {
     margin: 0;
-    color: var(--text-primary);
-    font-size: 1.25rem;
-}
-
-.modal-close {
-    background: none;
-    border: none;
-    font-size: 1.25rem;
-    color: var(--text-secondary);
-    cursor: pointer;
-    padding: 0.5rem;
-    border-radius: var(--radius-sm);
-    transition: background-color 0.2s ease;
-}
-
-.modal-close:hover {
-    background: var(--bg-secondary);
-}
-
-.modal-form {
-    padding: 1.5rem;
-}
-
-.form-section {
-    margin-bottom: 2rem;
-    padding-bottom: 1.5rem;
-    border-bottom: 1px solid var(--border-color);
-}
-
-.form-section:last-child {
-    border-bottom: none;
-    margin-bottom: 0;
-}
-
-.form-section h3 {
-    color: var(--text-primary);
-    font-size: 1.125rem;
+    font-size: 1.5rem;
     font-weight: 600;
-    margin-bottom: 0.75rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
+    color: #343a40;
 }
 
-.form-section h3::before {
-    content: '';
-    width: 4px;
-    height: 20px;
-    background: var(--primary-color);
-    border-radius: 2px;
+.modal-form .form-control {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    transition: all 0.2s ease-in-out;
+    font-size: 1rem;
 }
 
-.section-description {
-    color: var(--text-secondary);
-    font-size: 0.875rem;
-    margin-bottom: 1rem;
-    line-height: 1.5;
-    padding: 0.75rem;
-    background: var(--bg-secondary);
-    border-radius: var(--radius-md);
-    border-left: 3px solid var(--primary-color);
+.modal-form .form-control:focus {
+    background-color: #ffffff;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.15);
+    outline: none;
 }
 
-.modal-form .form-group {
+.form-group {
     margin-bottom: 1.5rem;
 }
 
-.modal-form label {
+.form-group label {
     display: block;
     margin-bottom: 0.5rem;
-    color: var(--text-primary);
     font-weight: 500;
-}
-
-.modal-form input,
-.modal-form select,
-.modal-form textarea {
-    width: 100%;
-    padding: 0.75rem;
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    font-size: 1rem;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.modal-form input:focus,
-.modal-form select:focus,
-.modal-form textarea:focus {
-    outline: none;
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.modal-form textarea {
-    resize: vertical;
-    min-height: 80px;
-    font-family: inherit;
+    color: #495057;
 }
 
 .form-actions {
     display: flex;
-    gap: 1rem;
     justify-content: flex-end;
+    gap: 0.75rem;
     margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #e9ecef;
+}
+
+@keyframes slide-down {
+    from {
+        transform: translateY(-30px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.checkbox-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 1rem;
+    background-color: #f8f9fa;
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+    max-height: 250px;
+    overflow-y: auto;
+}
+
+.checkbox-item {
+    background-color: #fff;
+    padding: 0.75rem 1rem;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.checkbox-item:hover {
+    border-color: var(--primary-color);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+.checkbox-item input[type="checkbox"] {
+    accent-color: var(--primary-color);
+    width: 1.2em;
+    height: 1.2em;
+}
+
+.checkbox-item label {
+    font-weight: 500;
+    color: #333;
+    margin-bottom: 0;
+}
+
+.step-indicators {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.step-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: #ced4da;
+    transition: background-color 0.3s ease;
+}
+
+.step-indicator.active {
+    background-color: var(--primary-color);
 }
 
 /* Sensor Grid */
@@ -2072,11 +2082,10 @@ a:hover {
     display: flex;
     align-items: center;
     gap: 1rem;
-    padding: 1rem;
-    background-color: #f8f9fa;
-    border-radius: 4px;
     margin-bottom: 2rem;
-    border-left: 4px solid var(--primary-color);
+    background-color: #f8f9fa;
+    padding: 1rem;
+    border-radius: 8px;
 }
 
 .step-header i {
@@ -2086,7 +2095,7 @@ a:hover {
 
 .step-header h4 {
     margin: 0;
-    font-size: 1.1rem;
+    font-weight: 600;
 }
 
 .step-header p {
@@ -2096,33 +2105,45 @@ a:hover {
 }
 
 .sensor-config-list {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: 1fr;
     gap: 1.5rem;
-    margin-top: 1rem;
 }
 
 .sensor-config-item {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: 100px 1fr 1fr;
     gap: 1rem;
     align-items: center;
-    padding-bottom: 1rem;
-    border-bottom: 1px solid #eee;
-}
-
-.sensor-config-item:last-child {
-    border-bottom: none;
+    padding: 1rem;
+    background-color: #f8f9fa;
+    border-radius: 8px;
 }
 
 .sensor-config-item label {
-    font-weight: bold;
-    color: #555;
+    font-weight: 600;
+    text-align: right;
+    padding-right: 1rem;
+    border-right: 1px solid #dee2e6;
+}
+
+.sensor-config-item .form-group {
+    margin-bottom: 0;
+}
+
+.status-badge {
+    padding: 0.3em 0.6em;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: #fff;
+    text-transform: capitalize;
 }
 
 .training-progress-view {
     text-align: center;
     padding: 2rem;
+    margin: 1rem 0;
 }
 
 .training-progress-view .progress-bar-container {

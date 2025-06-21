@@ -10,6 +10,10 @@ const authRoutes = require('./routes/auth');
 const dashboardRoutes = require('./routes/dashboard');
 
 const app = express();
+
+// Trust the first proxy in front of the app (e.g., on Render)
+app.set('trust proxy', 1);
+
 const PORT = process.env.PORT || 3000;
 
 // Security middleware
