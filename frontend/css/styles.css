@@ -1763,4 +1763,71 @@ a:hover {
     margin-top: 0.5rem;
     font-weight: 500;
     color: var(--text-secondary);
+}
+
+.modal-content.large {
+    max-width: 800px;
+}
+
+.modal-body {
+    padding: 1.5rem;
+}
+
+.details-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+}
+
+.details-section {
+    background-color: var(--bg-secondary);
+    padding: 1rem;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-light);
+}
+
+.details-section h3 {
+    font-size: 1.2rem;
+    color: var(--primary-color);
+    margin-bottom: 1rem;
+    border-bottom: 2px solid var(--border-color);
+    padding-bottom: 0.5rem;
+}
+
+.detail-pair {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.5rem 0;
+    font-size: 0.95rem;
+}
+
+.detail-pair:not(:last-child) {
+    border-bottom: 1px solid var(--border-light);
+}
+
+.detail-pair .label {
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.detail-pair .value {
+    color: var(--text-primary);
+    text-align: right;
+}
+
+.prediction-result {
+    margin-top: 1.5rem;
+    padding: 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background-color: var(--bg-secondary);
+}
+
+.prediction-result h3 {
+    margin-bottom: 1rem;
+    color: var(--primary-color);
+}
+
+.prediction-result p {
+    margin-bottom: 0.5rem;
 } 

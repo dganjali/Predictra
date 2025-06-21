@@ -177,11 +177,11 @@ def predict_anomaly(user_id: str, machine_id: str, data_sequence: List[Dict[str,
     with open(paths['columns_file'], 'r') as f:
         model_columns = json.load(f)
 
-    if len(data_sequence) != SEQUENCE_LEN:
-        return {"error": f"Input data must be a sequence of length {SEQUENCE_LEN}."}
-
-    df_sequence = pd.DataFrame(data_sequence)
+    # The frontend sends a dictionary of sensor values, not a sequence.
+    # We will create a sequence of length SEQUENCE_LEN by repeating the single reading.
+    df_sequence = pd.DataFrame([data_sequence] * SEQUENCE_LEN)
     df_sequence = df_sequence.reindex(columns=model_columns, fill_value=0)
+    
     scaled_sequence = scaler.transform(df_sequence)
     reshaped_sequence = np.array([scaled_sequence])
     
@@ -195,14 +195,43 @@ def predict_anomaly(user_id: str, machine_id: str, data_sequence: List[Dict[str,
     }
 
 if __name__ == "__main__":
-    if len(sys.argv) != 4:
-        result = {"success": False, "error": "Incorrect number of arguments provided."}
-        print(json.dumps(result))
+    if len(sys.argv) < 2:
+        print(json.dumps({"success": False, "error": "Mode (train/predict) not specified."}))
         sys.exit(1)
 
-    user_id_arg = sys.argv[1]
-    machine_id_arg = sys.argv[2]
-    data_path_arg = sys.argv[3]
+    mode = sys.argv[1]
 
-    training_result = train_model_for_machine(user_id_arg, machine_id_arg, data_path_arg)
-    print(json.dumps(training_result)) 
+    if mode == 'train':
+        if len(sys.argv) != 5:
+            result = {"success": False, "error": "Incorrect number of arguments for training mode."}
+            print(json.dumps(result))
+            sys.exit(1)
+        user_id_arg, machine_id_arg, data_path_arg = sys.argv[2], sys.argv[3], sys.argv[4]
+        result = train_model_for_machine(user_id_arg, machine_id_arg, data_path_arg)
+        print(json.dumps(result))
+    
+    elif mode == 'predict':
+        if len(sys.argv) != 5:
+            result = {"success": False, "error": "Incorrect number of arguments for prediction mode."}
+            print(json.dumps(result))
+            sys.exit(1)
+        
+        user_id_arg, machine_id_arg, data_path_arg = sys.argv[2], sys.argv[3], sys.argv[4]
+        
+        try:
+            with open(data_path_arg, 'r') as f:
+                sensor_data = json.load(f)
+            
+            prediction = predict_anomaly(user_id_arg, machine_id_arg, sensor_data)
+            
+            if "error" in prediction:
+                 print(json.dumps({"success": False, "error": prediction["error"]}))
+            else:
+                 print(json.dumps({"success": True, "data": prediction}))
+
+        except Exception as e:
+            print(json.dumps({"success": False, "error": f"Prediction failed: {str(e)}"}))
+
+    else:
+        print(json.dumps({"success": False, "error": f"Unknown mode: {mode}"}))
+        sys.exit(1) 

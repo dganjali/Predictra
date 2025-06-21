@@ -1,5 +1,8 @@
 // Dashboard JavaScript file for handling dashboard functionality
 
+let allMachines = [];
+let currentPredictionMachineId = null;
+
 document.addEventListener('DOMContentLoaded', function() {
     // Check authentication before loading dashboard
     checkDashboardAuth();
@@ -77,6 +80,15 @@ function initDashboard() {
     // Initialize logout functionality
     initLogout();
     
+    // Add event listener for the refresh button
+    const refreshBtn = document.getElementById('refreshBtn');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', () => {
+            showMessage('Refreshing dashboard data...', 'info');
+            loadDashboardData();
+        });
+    }
+    
     // Initialize dashboard navigation
     initDashboardNav();
     
@@ -149,6 +161,37 @@ function initHamburgerMenu() {
 function initMachineManagement() {
     // Initialize add machine modal
     initAddMachineModal();
+
+    // Initialize details modal
+    const detailsModal = document.getElementById('machineDetailsModal');
+    const closeDetailsBtn = document.getElementById('closeDetailsModal');
+    if (detailsModal && closeDetailsBtn) {
+        const closeModalFunc = () => detailsModal.classList.remove('show');
+        closeDetailsBtn.addEventListener('click', closeModalFunc);
+        detailsModal.addEventListener('click', (e) => {
+            if (e.target === detailsModal) {
+                closeModalFunc();
+            }
+        });
+    }
+
+    // Initialize prediction modal
+    const predictionModal = document.getElementById('predictionModal');
+    const closePredictionBtn = document.getElementById('closePredictionModal');
+    const cancelPredictionBtn = document.getElementById('cancelPrediction');
+    const predictionForm = document.getElementById('predictionForm');
+
+    if (predictionModal) {
+        const closeModalFunc = () => predictionModal.classList.remove('show');
+        closePredictionBtn.addEventListener('click', closeModalFunc);
+        cancelPredictionBtn.addEventListener('click', closeModalFunc);
+        predictionModal.addEventListener('click', (e) => {
+            if (e.target === predictionModal) {
+                closeModalFunc();
+            }
+        });
+        predictionForm.addEventListener('submit', handlePrediction);
+    }
 }
 
 function initAddMachineModal() {
@@ -355,6 +398,7 @@ async function loadDashboardData() {
         const result = await response.json();
         
         if (result.success) {
+            allMachines = result.data.machines;
             displayDashboardData(result.data);
         } else {
             console.error('Failed to load dashboard data:', result.message);
@@ -513,11 +557,67 @@ function displayAlerts(alerts) {
 }
 
 function viewMachineDetails(machineId) {
-    // Placeholder for machine details view
-    console.log('Viewing machine details for:', machineId);
-    // In a real application, this would navigate to a machine details page
-    // or open a modal with detailed SCADA information
-    showMessage('Machine details view coming soon!', 'info');
+    const machine = allMachines.find(m => m.id === machineId);
+    if (!machine) {
+        showMessage('Could not find machine details.', 'error');
+        return;
+    }
+
+    const modalTitle = document.getElementById('detailsModalTitle');
+    const modalBody = document.getElementById('machineDetailsBody');
+    const modal = document.getElementById('machineDetailsModal');
+
+    modalTitle.textContent = `Details for ${machine.name}`;
+    
+    // Helper to create detail pairs
+    const createDetail = (label, value) => {
+        const val = value || 'N/A';
+        return `<div class="detail-pair"><span class="label">${label}</span><span class="value">${val}</span></div>`;
+    };
+
+    modalBody.innerHTML = `
+        <div class="details-grid">
+            <div class="details-section">
+                <h3><i class="fas fa-cogs"></i> Identification</h3>
+                ${createDetail('Machine Type', machine.type)}
+                ${createDetail('Manufacturer', machine.manufacturer)}
+                ${createDetail('Model', machine.model)}
+                ${createDetail('Serial Number', machine.serialNumber)}
+                ${createDetail('Asset Tag', machine.assetTag)}
+            </div>
+            <div class="details-section">
+                <h3><i class="fas fa-network-wired"></i> SCADA & PLC</h3>
+                ${createDetail('SCADA System', machine.scadaSystem)}
+                ${createDetail('SCADA Version', machine.scadaVersion)}
+                ${createDetail('PLC Type', machine.plcType)}
+                ${createDetail('Protocol', machine.communicationProtocol)}
+                ${createDetail('IP Address', machine.ipAddress)}
+                ${createDetail('Port', machine.port)}
+            </div>
+            <div class="details-section">
+                <h3><i class="fas fa-info-circle"></i> Status & Health</h3>
+                ${createDetail('Status', machine.status)}
+                ${createDetail('Health Score', machine.healthScore + '%')}
+                ${createDetail('RUL Estimate', machine.rulEstimate + ' days')}
+                ${createDetail('Last Updated', new Date(machine.lastUpdated).toLocaleString())}
+            </div>
+            <div class="details-section">
+                <h3><i class="fas fa-tools"></i> Maintenance</h3>
+                ${createDetail('Location', machine.location)}
+                ${createDetail('Department', machine.department)}
+                ${createDetail('Installation Date', machine.installationDate ? new Date(machine.installationDate).toLocaleDateString() : 'N/A')}
+                ${createDetail('Last Maintenance', machine.lastMaintenance ? new Date(machine.lastMaintenance).toLocaleDateString() : 'N/A')}
+            </div>
+             <div class="details-section">
+                <h3><i class="fas fa-brain"></i> AI Model</h3>
+                ${createDetail('Model Status', machine.modelStatus)}
+                ${createDetail('Last Trained', machine.lastTrained ? new Date(machine.lastTrained).toLocaleString() : 'N/A')}
+                ${createDetail('Status Details', machine.statusDetails)}
+            </div>
+        </div>
+    `;
+
+    modal.classList.add('show');
 }
 
 function viewAnomalyData(machineId) {
@@ -526,6 +626,82 @@ function viewAnomalyData(machineId) {
     // In a real application, this would show anomaly detection results
     // and training metrics
     showMessage('Anomaly detection data view coming soon!', 'info');
+}
+
+function openPredictionModal(machineId) {
+    currentPredictionMachineId = machineId;
+    const machine = allMachines.find(m => m.id === machineId);
+    if (!machine) {
+        showMessage('Could not find machine details.', 'error');
+        return;
+    }
+
+    const modalTitle = document.getElementById('predictionModalTitle');
+    const formBody = document.getElementById('predictionFormBody');
+    const modal = document.getElementById('predictionModal');
+    const resultContainer = document.getElementById('predictionResult');
+
+    modalTitle.textContent = `Calculate Risk for ${machine.name}`;
+    resultContainer.style.display = 'none';
+
+    if (!machine.sensors || machine.sensors.length === 0) {
+        formBody.innerHTML = `<p class="text-center">This machine has no configured sensors for prediction.</p>`;
+    } else {
+        formBody.innerHTML = machine.sensors.map(sensor => `
+            <div class="form-group">
+                <label for="sensor-${sensor.sensorId}">${sensor.name} (${sensor.unit})</label>
+                <input type="number" step="any" id="sensor-${sensor.sensorId}" name="${sensor.sensorId}" required>
+            </div>
+        `).join('');
+    }
+
+    modal.classList.add('show');
+}
+
+async function handlePrediction(e) {
+    e.preventDefault();
+    const form = e.target;
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const resultContainer = document.getElementById('predictionResult');
+    
+    submitBtn.classList.add('loading');
+    submitBtn.disabled = true;
+
+    try {
+        const formData = new FormData(form);
+        const sensorData = {};
+        for (const [key, value] of formData.entries()) {
+            sensorData[key] = parseFloat(value);
+        }
+
+        const response = await fetch(`/api/dashboard/machine/${currentPredictionMachineId}/predict`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify({ sensorData })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            document.getElementById('riskScore').textContent = result.data.reconstruction_error.toFixed(4);
+            document.getElementById('isAnomaly').textContent = result.data.is_anomaly ? 'Yes' : 'No';
+            document.getElementById('anomalyThreshold').textContent = `(Threshold: ${result.data.threshold.toFixed(4)})`;
+            resultContainer.style.display = 'block';
+        } else {
+            showMessage(result.message || 'Prediction failed.', 'error');
+            resultContainer.style.display = 'none';
+        }
+
+    } catch (error) {
+        console.error('Prediction error:', error);
+        showMessage('An error occurred during prediction.', 'error');
+    } finally {
+        submitBtn.classList.remove('loading');
+        submitBtn.disabled = false;
+    }
 }
 
 // Utility function to format numbers
@@ -557,6 +733,8 @@ function getStatusColor(status) {
 }
 
 // Export functions for use in other modules
+window.viewMachineDetails = viewMachineDetails;
+window.openPredictionModal = openPredictionModal;
 window.dashboardUtils = {
     formatNumber,
     formatPercentage,

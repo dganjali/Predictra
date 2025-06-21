@@ -181,7 +181,23 @@ router.get('/data', auth, async (req, res) => {
                 lastUpdated: machine.lastUpdated,
                 location: machine.location,
                 criticality: machine.criticality,
-                scadaSystem: machine.scadaSystem
+                scadaSystem: machine.scadaSystem,
+                sensors: machine.sensors,
+                modelStatus: machine.modelStatus,
+                statusDetails: machine.statusDetails,
+                lastTrained: machine.lastTrained,
+                manufacturer: machine.manufacturer,
+                model: machine.model,
+                serialNumber: machine.serialNumber,
+                assetTag: machine.assetTag,
+                scadaVersion: machine.scadaVersion,
+                plcType: machine.plcType,
+                communicationProtocol: machine.communicationProtocol,
+                ipAddress: machine.ipAddress,
+                port: machine.port,
+                department: machine.department,
+                installationDate: machine.installationDate,
+                lastMaintenance: machine.lastMaintenance
             })),
             alerts: alerts,
             stats: stats
@@ -480,6 +496,80 @@ router.get('/machine/:machineId/sensor-data', auth, async (req, res) => {
     } catch (error) {
         console.error('Sensor data error:', error);
         res.status(500).json({ success: false, message: 'Failed to load sensor data' });
+    }
+});
+
+// @route   POST /api/dashboard/machine/:id/predict
+// @desc    Get a risk score for a single reading
+// @access  Private
+router.post('/machine/:id/predict', auth, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { sensorData } = req.body;
+
+        const machine = await Machine.findById(id);
+        if (!machine) {
+            return res.status(404).json({ success: false, message: 'Machine not found' });
+        }
+        if (machine.userId.toString() !== req.user._id.toString()) {
+            return res.status(403).json({ success: false, message: 'User not authorized' });
+        }
+        if (machine.modelStatus !== 'trained') {
+            return res.status(400).json({ success: false, message: 'Model for this machine is not trained yet.' });
+        }
+
+        // Create a temporary file for the prediction sequence
+        const tempDir = path.join(__dirname, '..', 'uploads', 'temp');
+        if (!fs.existsSync(tempDir)) {
+            fs.mkdirSync(tempDir, { recursive: true });
+        }
+        const sequenceFilePath = path.join(tempDir, `predict_sequence_${machine._id}_${Date.now()}.json`);
+        fs.writeFileSync(sequenceFilePath, JSON.stringify(sensorData));
+
+        const pythonScriptPath = path.join(__dirname, '..', 'models', 'anomaly.py');
+        const pythonProcess = spawn('python3', [
+            pythonScriptPath, 
+            'predict',
+            req.user._id.toString(), 
+            machine._id.toString(), 
+            sequenceFilePath
+        ]);
+
+        let rawOutput = '';
+        pythonProcess.stdout.on('data', (data) => {
+            rawOutput += data.toString();
+        });
+
+        pythonProcess.stderr.on('data', (data) => {
+            console.error(`[Prediction Error for ${machine._id}]: ${data.toString()}`);
+        });
+
+        pythonProcess.on('close', (code) => {
+            // Clean up the temporary file
+            fs.unlink(sequenceFilePath, (err) => {
+                if (err) console.error("Error deleting temp prediction file:", err);
+            });
+
+            if (code !== 0) {
+                return res.status(500).json({ success: false, message: 'Prediction script failed.' });
+            }
+
+            try {
+                const result = JSON.parse(rawOutput);
+                if (result.success) {
+                    res.json({ success: true, data: result.data });
+                } else {
+                    res.status(500).json({ success: false, message: result.error || 'Prediction failed.' });
+                }
+            } catch (e) {
+                console.error('Error parsing python output', e);
+                res.status(500).json({ success: false, message: 'Failed to parse prediction output.' });
+            }
+        });
+
+    } catch (error) {
+        console.error('Prediction route error:', error);
+        res.status(500).json({ success: false, message: 'Server error during prediction' });
     }
 });
 

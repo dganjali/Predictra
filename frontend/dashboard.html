@@ -283,10 +283,6 @@
                     </div>
                 </div>
 
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" id="cancelAddMachine">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Add Machine & Begin Training</button>
-                </div>
                 <div class="form-progress" id="uploadProgressContainer" style="display: none;">
                     <p>Uploading training data, please wait...</p>
                     <div class="progress-bar-container">
@@ -294,7 +290,54 @@
                     </div>
                     <span id="uploadProgressText">0%</span>
                 </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelAddMachine">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Machine & Begin Training</button>
+                </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Machine Details Modal -->
+    <div class="modal" id="machineDetailsModal">
+        <div class="modal-content large">
+            <div class="modal-header">
+                <h2 id="detailsModalTitle">Machine Details</h2>
+                <button class="modal-close" id="closeDetailsModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body" id="machineDetailsBody">
+                <!-- Details will be populated here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Prediction Modal -->
+    <div class="modal" id="predictionModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="predictionModalTitle">Calculate Risk Score</h2>
+                <button class="modal-close" id="closePredictionModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="predictionForm" class="modal-form">
+                <div id="predictionFormBody">
+                    <!-- Sensor inputs will be dynamically generated here -->
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelPrediction">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Calculate</button>
+                </div>
+            </form>
+            <div id="predictionResult" style="display:none;" class="prediction-result">
+                <h3>Prediction Result</h3>
+                <p><strong>Risk Score:</strong> <span id="riskScore"></span></p>
+                <p><strong>Is Anomaly:</strong> <span id="isAnomaly"></span></p>
+                <p id="anomalyThreshold"></p>
+            </div>
         </div>
     </div>
 
