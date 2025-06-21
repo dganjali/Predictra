@@ -258,7 +258,7 @@ router.post('/add-machine', auth, upload.single('trainingData'), async (req, res
             // Sensor Configuration
             sensors: machineData.sensors,
             dataDescription: machineData.dataDescription,
-            trainingDataFile: req.file.path,
+            trainingDataPath: req.file.path,
             modelStatus: 'training'
         });
         

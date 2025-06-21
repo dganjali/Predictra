@@ -29,10 +29,7 @@ async function verifyToken(token) {
     try {
         const response = await fetch('/api/auth/me', {
             method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            }
+            headers: { 'Authorization': `Bearer ${token}` }
         });
         
         const data = await response.json();
@@ -60,21 +57,8 @@ function displayUserInfo(user) {
     const userInfoElement = document.getElementById('userInfo');
     if (userInfoElement && user) {
         userInfoElement.innerHTML = `
-            <div class="user-detail">
-                <strong>Name:</strong> ${user.firstName} ${user.lastName}
-            </div>
-            <div class="user-detail">
-                <strong>Email:</strong> ${user.email}
-            </div>
-            <div class="user-detail">
-                <strong>Company:</strong> ${user.company || 'Not specified'}
-            </div>
-            <div class="user-detail">
-                <strong>Role:</strong> ${user.role}
-            </div>
-            <div class="user-detail">
-                <strong>Member since:</strong> ${window.authUtils ? window.authUtils.formatDate(user.createdAt) : new Date(user.createdAt).toLocaleDateString()}
-            </div>
+            <div class="user-detail"><strong>Name:</strong> ${user.firstName} ${user.lastName}</div>
+            <div class="user-detail"><strong>Email:</strong> ${user.email}</div>
         `;
     }
     
@@ -85,7 +69,7 @@ function displayUserInfo(user) {
 function setUserName(user) {
     const userNameElement = document.getElementById('userName');
     if (userNameElement && user) {
-        userNameElement.textContent = `${user.firstName} ${user.lastName}`;
+        userNameElement.textContent = `${user.firstName}`;
     }
 }
 
@@ -109,30 +93,10 @@ function initDashboard() {
 function initLogout() {
     const logoutBtn = document.getElementById('logoutBtn');
     if (logoutBtn) {
-        logoutBtn.addEventListener('click', async function(e) {
+        logoutBtn.addEventListener('click', async (e) => {
             e.preventDefault();
-            
-            const token = localStorage.getItem('token');
-            
-            try {
-                // Call logout API
-                await fetch('/api/auth/logout', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
-                });
-            } catch (error) {
-                console.error('Logout API error:', error);
-                // Continue with logout even if API call fails
-            }
-            
-            // Clear local storage
             localStorage.removeItem('token');
             localStorage.removeItem('user');
-            
-            // Redirect to home page
             window.location.href = '/';
         });
     }
@@ -166,7 +130,7 @@ function initHamburgerMenu() {
     const navMenu = document.querySelector('.nav-menu');
     
     if (hamburger && navMenu) {
-        hamburger.addEventListener('click', function() {
+        hamburger.addEventListener('click', () => {
             hamburger.classList.toggle('active');
             navMenu.classList.toggle('active');
         });
@@ -185,362 +149,126 @@ function initHamburgerMenu() {
 function initMachineManagement() {
     // Initialize add machine modal
     initAddMachineModal();
-    
-    // Initialize file upload functionality
-    // initFileUpload(); // This seems to be causing issues, let's look at this later if needed
-    
-    // Initialize sensor selection - REMOVED
-    // initSensorSelection(); 
-    // Initialize sensor selection
-    initSensorSelection();
 }
 
 function initAddMachineModal() {
     const modal = document.getElementById('addMachineModal');
     const addMachineBtn = document.getElementById('addMachineBtn');
     const addFirstMachineBtn = document.getElementById('addFirstMachineBtn');
-    const closeModal = document.getElementById('closeModal');
-    const cancelAdd = document.getElementById('cancelAdd');
+    const closeModalBtn = document.getElementById('closeModal');
+    const cancelBtn = document.getElementById('cancelAddMachine');
     const form = document.getElementById('addMachineForm');
-    
-    // Open modal
-    if (addMachineBtn) {
-        addMachineBtn.addEventListener('click', () => {
-            modal.classList.add('show');
+
+    const openModal = () => {
+        if (modal) modal.classList.add('show');
+    };
+
+    const closeModalFunc = () => {
+        if (modal) modal.classList.remove('show');
+    };
+
+    if (addMachineBtn) addMachineBtn.addEventListener('click', openModal);
+    if (addFirstMachineBtn) addFirstMachineBtn.addEventListener('click', openModal);
+    if (closeModalBtn) closeModalBtn.addEventListener('click', closeModalFunc);
+    if (cancelBtn) cancelBtn.addEventListener('click', closeModalFunc);
+
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeModalFunc();
+            }
         });
     }
-    
-    if (addFirstMachineBtn) {
-        addFirstMachineBtn.addEventListener('click', () => {
-            modal.classList.add('show');
-        });
-    }
-    
-    // Close modal
-    if (closeModal) {
-        closeModal.addEventListener('click', () => {
-            modal.classList.remove('show');
-        });
-    }
-    
-    if (cancelAdd) {
-        cancelAdd.addEventListener('click', () => {
-            modal.classList.remove('show');
-        });
-    }
-    
-    // Close modal when clicking outside
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) {
-            modal.classList.remove('show');
-        }
-    });
-    
-    // Handle form submission
+
     if (form) {
         form.addEventListener('submit', handleAddMachine);
     }
 }
 
-function initFileUpload() {
-    const fileInput = document.getElementById('trainingData');
-    const uploadArea = document.getElementById('fileUploadArea');
-    const uploadedFiles = document.getElementById('uploadedFiles');
-    
-    if (!fileInput || !uploadArea || !uploadedFiles) return;
-    
-    // Handle file selection
-    fileInput.addEventListener('change', (e) => {
-        const files = Array.from(e.target.files);
-        displayUploadedFiles(files);
-        validateTrainingData(files[0]);
-    });
-    
-    // Drag and drop functionality
-    uploadArea.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        uploadArea.style.borderColor = 'var(--primary-color)';
-        uploadArea.style.background = 'var(--bg-primary)';
-    });
-    
-    uploadArea.addEventListener('dragleave', (e) => {
-        e.preventDefault();
-        uploadArea.style.borderColor = 'var(--border-color)';
-        uploadArea.style.background = 'var(--bg-secondary)';
-    });
-    
-    uploadArea.addEventListener('drop', (e) => {
-        e.preventDefault();
-        uploadArea.style.borderColor = 'var(--border-color)';
-        uploadArea.style.background = 'var(--bg-secondary)';
-        
-        const files = Array.from(e.dataTransfer.files);
-        fileInput.files = e.dataTransfer.files;
-        displayUploadedFiles(files);
-        validateTrainingData(files[0]);
-    });
-}
-
-function validateTrainingData(file) {
-    if (!file) return;
-    
-    const allowedTypes = [
-        'text/csv',
-        'application/vnd.ms-excel',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'application/json',
-        'text/plain'
-    ];
-    
-    const allowedExtensions = ['.csv', '.xlsx', '.xls', '.json', '.txt'];
-    const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
-    
-    if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(fileExtension)) {
-        showFormError('trainingData', 'Please upload a valid file type (CSV, Excel, JSON, or TXT)');
-        return false;
-    }
-    
-    if (file.size > 50 * 1024 * 1024) { // 50MB limit
-        showFormError('trainingData', 'File size must be less than 50MB');
-        return false;
-    }
-    
-    clearFormError('trainingData');
-    return true;
-}
-
 function showFormError(fieldId, message) {
     const field = document.getElementById(fieldId);
+    if (!field) return;
     const formGroup = field.closest('.form-group');
+    if (!formGroup) return;
     
     formGroup.classList.add('error');
     
-    // Remove existing error message
-    const existingError = formGroup.querySelector('.error-message');
-    if (existingError) {
-        existingError.remove();
+    let errorElement = formGroup.querySelector('.form-error');
+    if (!errorElement) {
+        errorElement = document.createElement('div');
+        errorElement.className = 'form-error';
+        formGroup.appendChild(errorElement);
     }
-    
-    // Add new error message
-    const errorElement = document.createElement('div');
-    errorElement.className = 'error-message';
     errorElement.textContent = message;
-    formGroup.appendChild(errorElement);
 }
 
-function clearFormError(fieldId) {
-    const field = document.getElementById(fieldId);
-    const formGroup = field.closest('.form-group');
-    
-    formGroup.classList.remove('error');
-    
-    const errorElement = formGroup.querySelector('.error-message');
-    if (errorElement) {
-        errorElement.remove();
-    }
+function clearFormErrors() {
+    document.querySelectorAll('#addMachineForm .form-group.error').forEach(group => {
+        group.classList.remove('error');
+        const errorElement = group.querySelector('.form-error');
+        if (errorElement) errorElement.textContent = '';
+    });
 }
 
-function validateForm(formData) {
+function validateForm() {
+    clearFormErrors();
     let isValid = true;
-    
-    // Required fields validation
-    const requiredFields = [
-        'machineName', 'machineType', 'model', 
-        'serialNumber', 'scadaSystem'
-    ];
-    
-    requiredFields.forEach(field => {
-        const value = formData.get(field);
-        if (!value || value.trim() === '') {
-            showFormError(field, 'This field is required');
+    const requiredFields = ['machineName', 'machineType', 'model', 'serialNumber', 'scadaSystem', 'trainingData'];
+
+    requiredFields.forEach(fieldId => {
+        const field = document.getElementById(fieldId);
+        if (!field) return;
+        
+        const isFile = field.type === 'file';
+        const isEmpty = isFile ? field.files.length === 0 : field.value.trim() === '';
+
+        if (isEmpty) {
+            showFormError(fieldId, 'This field is required.');
             isValid = false;
-        } else {
-            clearFormError(field);
         }
     });
-    
-    // Sensors validation
-    const sensors = formData.getAll('sensors');
-    if (sensors.length === 0) {
-        showFormError('sensorGrid', 'At least one sensor must be selected');
-        isValid = false;
-    } else {
-        clearFormError('sensorGrid');
-    }
-    
-    // Training data validation
-    const trainingData = document.getElementById('trainingData').files[0];
-    if (!trainingData) {
-        showFormError('trainingData', 'Training data file is required');
-        isValid = false;
-    } else if (!validateTrainingData(trainingData)) {
-        isValid = false;
-    }
-    
     return isValid;
-}
-
-function displayUploadedFiles(files) {
-    const uploadedFiles = document.getElementById('uploadedFiles');
-    if (!uploadedFiles) return;
-    
-    uploadedFiles.innerHTML = '';
-    
-    files.forEach((file, index) => {
-        const fileElement = document.createElement('div');
-        fileElement.className = 'uploaded-file';
-        
-        const fileSize = (file.size / 1024).toFixed(1);
-        const fileSizeUnit = file.size > 1024 * 1024 ? 'MB' : 'KB';
-        
-        fileElement.innerHTML = `
-            <div class="uploaded-file-info">
-                <i class="fas fa-file-alt"></i>
-                <div>
-                    <div class="uploaded-file-name">${file.name}</div>
-                    <div class="uploaded-file-size">${fileSize} ${fileSizeUnit}</div>
-                </div>
-            </div>
-            <button type="button" class="remove-file" onclick="removeFile(${index})">
-                <i class="fas fa-times"></i>
-            </button>
-        `;
-        
-        uploadedFiles.appendChild(fileElement);
-    });
-}
-
-function removeFile(index) {
-    const fileInput = document.getElementById('trainingData');
-    const dt = new DataTransfer();
-    const files = Array.from(fileInput.files);
-    
-    files.splice(index, 1);
-    files.forEach(file => dt.items.add(file));
-    
-    fileInput.files = dt.files;
-    displayUploadedFiles(Array.from(fileInput.files));
-}
-
-function initSensorSelection() {
-    const sensorItems = document.querySelectorAll('.sensor-item');
-    
-    sensorItems.forEach(item => {
-        const checkbox = item.querySelector('input[type="checkbox"]');
-        const label = item.querySelector('label');
-        
-        // Toggle selection when clicking the entire item
-        item.addEventListener('click', (e) => {
-            if (e.target !== checkbox) {
-                checkbox.checked = !checkbox.checked;
-                updateSensorItemStyle(item, checkbox.checked);
-            }
-        });
-        
-        // Update style when checkbox changes
-        checkbox.addEventListener('change', () => {
-            updateSensorItemStyle(item, checkbox.checked);
-        });
-        
-        // Initial style
-        updateSensorItemStyle(item, checkbox.checked);
-    });
-}
-
-function updateSensorItemStyle(item, isChecked) {
-    if (isChecked) {
-        item.style.borderColor = 'var(--primary-color)';
-        item.style.background = 'var(--bg-primary)';
-    } else {
-        item.style.borderColor = 'var(--border-color)';
-        item.style.background = 'var(--bg-secondary)';
-    }
 }
 
 async function handleAddMachine(e) {
     e.preventDefault();
-    
-    const form = e.target;
+    if (!validateForm()) {
+        showMessage('Please fill out all required fields.', 'error');
+        return;
+    }
+
+    const form = document.getElementById('addMachineForm');
     const submitBtn = form.querySelector('button[type="submit"]');
-    
-    // Show loading state
     submitBtn.classList.add('loading');
     submitBtn.disabled = true;
-    
+
     try {
-        // Collect form data
         const formData = new FormData(form);
-        
-        // Validate form
-        if (!validateForm(formData)) {
-            showMessage('Please fix the errors in the form', 'error');
-            return;
+        const machineData = {};
+        for (const [key, value] of formData.entries()) {
+            if (key !== 'trainingData') {
+                machineData[key] = value;
+            }
         }
         
-        const machineData = {
-            // Machine Identification
-            machineName: formData.get('machineName'),
-            machineType: formData.get('machineType'),
-            manufacturer: formData.get('manufacturer'),
-            model: formData.get('model'),
-            serialNumber: formData.get('serialNumber'),
-            assetTag: formData.get('assetTag'),
-            
-            // SCADA Configuration
-            scadaSystem: formData.get('scadaSystem'),
-            scadaVersion: formData.get('scadaVersion'),
-            plcType: formData.get('plcType'),
-            communicationProtocol: formData.get('communicationProtocol'),
-            ipAddress: formData.get('ipAddress'),
-            port: formData.get('port') ? parseInt(formData.get('port')) : null,
-            
-            // Sensor Configuration
-            sensors: formData.getAll('sensors'),
-            
-            // Training Data Information
-            dataDescription: formData.get('dataDescription')
-        };
-        
-        // Add training data file
-        const trainingDataFile = document.getElementById('trainingData').files[0];
-        if (trainingDataFile) {
-            machineData.trainingData = trainingDataFile;
-        }
-        
-        console.log('Machine data to be sent:', machineData);
-        
-        // Send to backend for processing
         const response = await fetch('/api/dashboard/add-machine', {
             method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-            },
-            body: createFormDataWithFile(machineData, trainingDataFile)
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+            body: createFormDataWithFile(machineData, formData.get('trainingData'))
         });
         
         const result = await response.json();
-        
         if (result.success) {
-            // Show success message
-            showMessage('Machine added successfully! Training anomaly detection model...', 'success');
-            
-            // Close modal
+            showMessage('Machine added successfully! Model training has started.', 'success');
             document.getElementById('addMachineModal').classList.remove('show');
-            
-            // Refresh dashboard data
-            setTimeout(() => {
-                loadDashboardData();
-            }, 2000);
-            
+            setTimeout(loadDashboardData, 1000);
         } else {
-            showMessage(result.message || 'Failed to add machine', 'error');
+            showMessage(result.message || 'Failed to add machine.', 'error');
         }
-        
     } catch (error) {
         console.error('Error adding machine:', error);
-        showMessage('Network error. Please try again.', 'error');
+        showMessage('A network error occurred. Please try again.', 'error');
     } finally {
-        // Reset loading state
         submitBtn.classList.remove('loading');
         submitBtn.disabled = false;
     }
@@ -584,9 +312,7 @@ function showMessage(message, type = 'info') {
 async function loadDashboardData() {
     try {
         const response = await fetch('/api/dashboard/data', {
-            headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-            }
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         });
         
         const result = await response.json();
@@ -616,7 +342,7 @@ function displayDashboardData(data) {
     
     const alertsCountElement = document.getElementById('alertsCount');
     if (alertsCountElement && data.stats) {
-        alertsCountElement.textContent = data.stats.criticalMachines + data.stats.warningMachines;
+        alertsCountElement.textContent = data.stats.warningMachines + data.stats.criticalMachines;
     }
     
     const healthyMachinesElement = document.getElementById('healthyMachines');
@@ -665,11 +391,11 @@ function displayMachines(machines) {
     }
     
     machinesContainer.innerHTML = machines.map(machine => `
-        <div class="machine-card ${machine.status}">
+        <div class="machine-card ${machine.status || 'healthy'}">
             <div class="machine-header">
                 <h3>${machine.name}</h3>
                 <div class="machine-badges">
-                    <span class="status-badge ${machine.status}">${machine.status}</span>
+                    <span class="status-badge ${machine.status || 'N/A'}">${machine.status || 'N/A'}</span>
                     <span class="criticality-badge ${machine.criticality}">${machine.criticality}</span>
                 </div>
             </div>
