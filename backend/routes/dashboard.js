@@ -1667,7 +1667,7 @@ router.post('/machine/:id/calculate-risk-rul', auth, upload.single('csvFile'), a
 });
 
 // Helper function to start prediction using stored parameters
-async function startPredictionWithStoredParams(machine, csvFilePath, customTimeout = 45000) {
+async function startPredictionWithStoredParams(machine, csvFilePath, customTimeout = 60000) {
     const machineId = machine._id.toString();
     const userId = machine.userId.toString();
     
@@ -1764,13 +1764,6 @@ async function startPredictionWithStoredParams(machine, csvFilePath, customTimeo
             console.error(`[Prediction Error for ${machineId}]: ${errorOutput}`);
         });
 
-        // Add timeout to prevent hanging - reduced for faster feedback
-        const predictionTimeout = setTimeout(() => {
-            console.error(`⏰ Prediction timeout for machine ${machineId} after 30 seconds`);
-            pythonProcess.kill('SIGTERM');
-            // Don't throw here, handle in the promise rejection below
-        }, 30000); // 30 seconds timeout
-
         // Wait for process completion
         return new Promise((resolve, reject) => {
             let timeoutOccurred = false;
@@ -1780,13 +1773,11 @@ async function startPredictionWithStoredParams(machine, csvFilePath, customTimeo
                 timeoutOccurred = true;
                 console.error(`⏰ Prediction timeout for machine ${machineId} after ${customTimeout/1000} seconds`);
                 pythonProcess.kill('SIGTERM');
-                clearTimeout(predictionTimeout);
                 reject(new Error(`Prediction timed out after ${customTimeout/1000} seconds. Please try again with a smaller file or check if the model files exist.`));
             }, customTimeout);
             
             pythonProcess.on('close', async (code) => {
                 clearTimeout(timeoutHandler);
-                clearTimeout(predictionTimeout);
                 const predictionDuration = Date.now() - processStartTime;
                 
                 if (timeoutOccurred) {
