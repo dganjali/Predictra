@@ -311,7 +311,7 @@ a:hover {
 
 .hero-subtitle {
     font-size: 1.125rem;
-    color: var(--text-secondary);
+    color: #ffffff;
     max-width: 600px;
     margin: 1rem auto 2rem;
 }
