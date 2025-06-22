@@ -1232,7 +1232,7 @@ async function startUltraSimpleTraining(machine, user, csvFilePath) {
                         await new Promise(resolve => setTimeout(resolve, 2000));
                         
                         // For automatic prediction after training, use a longer timeout
-                        const predictionResult = await startPredictionWithStoredParams(machine, csvFilePath, 45000); // 45 second timeout
+                        const predictionResult = await startPredictionWithStoredParams(machine, csvFilePath, 60000); // 60 second timeout
                         
                         // Update machine with prediction results
                         await Machine.findByIdAndUpdate(machineId, {
@@ -1604,39 +1604,32 @@ router.put('/machine/:id/update-params', async (req, res) => {
 });
 
 // Calculate risk and RUL for a trained machine
-router.post('/machine/:id/calculate-risk-rul', auth, upload.single('csvFile'), async (req, res) => {
+router.post('/machine/:machineId/calculate-risk-rul', auth, upload.single('csvFile'), async (req, res) => {
+    const { machineId } = req.params;
+    const csvFilePath = req.file ? req.file.path : null;
+
     try {
-        const { id } = req.params;
-
-        if (!req.file) {
-            return res.status(400).json({ success: false, message: 'No CSV file uploaded.' });
-        }
-
-        const machine = await Machine.findById(id);
-
+        const machine = await Machine.findById(machineId);
         if (!machine) {
             return res.status(404).json({ success: false, message: 'Machine not found' });
         }
-        
-        if (machine.userId.toString() !== req.user._id.toString()) {
-            return res.status(403).json({ success: false, message: 'User not authorized' });
-        }
-        
-        // Check if machine has been trained
-        if (!machine.trained || !machine.model_params) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Machine has not been trained yet. Please train the machine first.',
-                trained: machine.trained,
-                has_model_params: !!machine.model_params
-            });
+
+        if (!csvFilePath) {
+            return res.status(400).json({ success: false, message: 'No CSV file provided for analysis' });
         }
 
-        const csvFilePath = req.file.path;
-        console.log(`🔍 Calculating risk and RUL for machine ${id} using CSV: ${csvFilePath}`);
+        console.log(`Received CSV file for risk/RUL calculation: ${csvFilePath}`);
 
-        // Start prediction process using the machine's stored parameters with longer timeout
-        const predictionResult = await startPredictionWithStoredParams(machine, csvFilePath, 45000); // 45 second timeout
+        // Use the new prediction function with stored parameters
+        const predictionResult = await startPredictionWithStoredParams(machine, csvFilePath, 60000); // 60 second timeout
+
+        // Update machine with the latest prediction results
+        machine.healthScore = predictionResult.health_score;
+        machine.rulEstimate = predictionResult.rul_estimate;
+        machine.status = predictionResult.machine_status;
+        machine.lastUpdated = new Date();
+        
+        await machine.save();
 
         // Clean up uploaded file
         if (fs.existsSync(csvFilePath)) {
@@ -1645,24 +1638,19 @@ router.post('/machine/:id/calculate-risk-rul', auth, upload.single('csvFile'), a
 
         res.json({
             success: true,
-            message: 'Risk and RUL calculation completed successfully',
-            machine_id: machine._id,
-            machine_name: machine.machineName,
-            results: predictionResult
+            message: 'Risk and RUL calculation complete',
+            results: predictionResult,
         });
 
     } catch (error) {
         console.error('Calculate risk/RUL error:', error);
         
-        // Clean up file on error
-        if (req.file && fs.existsSync(req.file.path)) {
-            fs.unlinkSync(req.file.path);
+        // Clean up uploaded file on error
+        if (csvFilePath && fs.existsSync(csvFilePath)) {
+            fs.unlinkSync(csvFilePath);
         }
         
-        res.status(500).json({ 
-            success: false, 
-            message: `Error calculating risk and RUL: ${error.message}` 
-        });
+        res.status(500).json({ success: false, message: error.message });
     }
 });
 
@@ -1934,35 +1922,56 @@ function calculateRULWithMachineParams(riskScore, isAnomaly = false, modelParams
     };
 }
 
-// Helper function to create optimized CSV for faster prediction
+// Helper function to create a smaller, optimized version of a CSV file for prediction
 async function createOptimizedCsvForPrediction(originalCsvPath) {
-    try {
+    const MAX_SIZE_BYTES = 1 * 1024 * 1024; // 1MB
+    const tempDir = path.join(__dirname, '..', 'uploads');
+    const optimizedCsvPath = path.join(tempDir, `optimized_${path.basename(originalCsvPath)}`);
+    
+    return new Promise((resolve, reject) => {
         const stats = fs.statSync(originalCsvPath);
-        const fileSizeInMB = stats.size / (1024 * 1024);
-        
-        // Only optimize if file is larger than 1MB
-        if (fileSizeInMB <= 1) {
-            return null; // Use original file
+        if (stats.size <= MAX_SIZE_BYTES) {
+            console.log(`File size (${stats.size} bytes) is within limit. No optimization needed.`);
+            return resolve(null); // No optimization needed
         }
+
+        console.log(`File size (${stats.size} bytes) exceeds 1MB limit. Optimizing...`);
         
-        console.log(`📦 Optimizing CSV file (${fileSizeInMB.toFixed(2)}MB) for faster prediction...`);
+        const readStream = fs.createReadStream(originalCsvPath, { highWaterMark: 64 * 1024 });
+        const writeStream = fs.createWriteStream(optimizedCsvPath);
+        let totalBytesRead = 0;
+        let header = null;
+
+        const lineReader = readline.createInterface({
+            input: readStream,
+            crlfDelay: Infinity
+        });
+
+        lineReader.on('line', (line) => {
+            if (header === null) {
+                header = line;
+                writeStream.write(header + '\n');
+                totalBytesRead += Buffer.byteLength(header, 'utf8') + 1;
+            } else if (totalBytesRead + Buffer.byteLength(line, 'utf8') + 1 <= MAX_SIZE_BYTES) {
+                writeStream.write(line + '\n');
+                totalBytesRead += Buffer.byteLength(line, 'utf8') + 1;
+            } else {
+                lineReader.close();
+            }
+        });
+
+        lineReader.on('close', () => {
+            writeStream.end();
+        });
         
-        const optimizedPath = originalCsvPath.replace('.csv', '_optimized.csv');
-        
-        // Simple approach: just copy first 1000 lines
-        const fileContent = fs.readFileSync(originalCsvPath, 'utf8');
-        const lines = fileContent.split('\n');
-        const optimizedLines = lines.slice(0, 1000);
-        
-        fs.writeFileSync(optimizedPath, optimizedLines.join('\n'));
-        
-        console.log(`✅ Created optimized CSV with ${optimizedLines.length} rows: ${optimizedPath}`);
-        return optimizedPath;
-        
-    } catch (error) {
-        console.error('❌ Error creating optimized CSV:', error);
-        return null; // Fall back to original file
-    }
+        writeStream.on('finish', () => {
+            console.log(`Optimized CSV created at: ${optimizedCsvPath} (${totalBytesRead} bytes)`);
+            resolve(optimizedCsvPath);
+        });
+
+        readStream.on('error', reject);
+        writeStream.on('error', reject);
+    });
 }
 
 module.exports = router;
