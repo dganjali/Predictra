@@ -103,18 +103,52 @@ class UltraSimpleTrainer:
             self._send_progress(10, "Loading training data...")
             self._send_detailed_message("Reading CSV file...", "info")
             
+            # First, detect the delimiter by reading a small sample
+            with open(csv_path, 'r') as f:
+                first_line = f.readline().strip()
+            
+            # Detect delimiter (comma or semicolon)
+            comma_count = first_line.count(',')
+            semicolon_count = first_line.count(';')
+            delimiter = ';' if semicolon_count > comma_count else ','
+            
+            self._send_detailed_message(f"Detected delimiter: '{delimiter}'", "info")
+            
             # Read only first few rows to get column info
-            df_sample = pd.read_csv(csv_path, nrows=100)
-            available_columns = [col for col in sensor_columns if col in df_sample.columns]
+            df_sample = pd.read_csv(csv_path, nrows=100, delimiter=delimiter)
+            self._send_detailed_message(f"CSV has {len(df_sample.columns)} columns", "info")
+            
+            # If no sensor columns provided, use all numeric columns
+            if not sensor_columns:
+                # Filter out non-sensor columns (metadata columns)
+                exclude_patterns = ['time', 'timestamp', 'date', 'id', 'asset', 'train', 'test', 'status']
+                available_columns = []
+                
+                for col in df_sample.columns:
+                    col_lower = col.lower()
+                    # Include if it's not a metadata column and contains sensor-related keywords
+                    if not any(pattern in col_lower for pattern in exclude_patterns):
+                        available_columns.append(col)
+                
+                self._send_detailed_message(f"Auto-detected {len(available_columns)} sensor columns", "info")
+            else:
+                # Use provided sensor columns
+                available_columns = [col for col in sensor_columns if col in df_sample.columns]
             
             if not available_columns:
-                raise ValueError(f"No sensor columns found in CSV. Available: {list(df_sample.columns)}")
+                # If still no columns, use all numeric columns
+                numeric_columns = df_sample.select_dtypes(include=[np.number]).columns.tolist()
+                available_columns = numeric_columns[:20]  # Limit to first 20 numeric columns
+                self._send_detailed_message(f"Using first 20 numeric columns: {available_columns[:5]}...", "info")
             
-            self._send_detailed_message(f"Using sensor columns: {', '.join(available_columns)}", "info")
+            if not available_columns:
+                raise ValueError(f"No suitable sensor columns found. Available columns: {list(df_sample.columns)}")
+            
+            self._send_detailed_message(f"Using sensor columns: {', '.join(available_columns[:5])}{'...' if len(available_columns) > 5 else ''}", "info")
             
             # Read full dataset with only needed columns
             self._send_progress(15, "Loading sensor data...")
-            df_sensors = pd.read_csv(csv_path, usecols=available_columns)
+            df_sensors = pd.read_csv(csv_path, usecols=available_columns, delimiter=delimiter)
             self._send_detailed_message(f"Loaded {len(df_sensors)} rows with {len(available_columns)} sensors", "info")
             
             # Handle missing values
@@ -370,33 +404,20 @@ def main():
         machine_id = sys.argv[2]
         csv_path = sys.argv[3]
         
-        # Load sensor columns from environment or use defaults
+        # Load sensor columns from environment or use auto-detection
         sensor_columns_str = os.environ.get('SENSOR_COLUMNS', '')
         if sensor_columns_str:
             try:
                 sensor_columns = json.loads(sensor_columns_str)
+                logger.info(f"Using provided sensor columns: {sensor_columns}")
             except json.JSONDecodeError:
-                error_data = {
-                    "type": "error",
-                    "message": "Invalid SENSOR_COLUMNS environment variable"
-                }
-                print(json.dumps(error_data), flush=True)
-                sys.exit(1)
+                logger.warning("Invalid SENSOR_COLUMNS environment variable, will auto-detect")
+                sensor_columns = []
         else:
-            # Try to infer columns from CSV
-            try:
-                df = pd.read_csv(csv_path, nrows=1)
-                sensor_columns = [col for col in df.columns if col.lower() not in ['timestamp', 'time', 'date', 'id']]
-            except Exception as e:
-                error_data = {
-                    "type": "error",
-                    "message": f"Could not read CSV file: {str(e)}"
-                }
-                print(json.dumps(error_data), flush=True)
-                sys.exit(1)
+            logger.info("No sensor columns provided, will auto-detect from CSV")
+            sensor_columns = []
         
         logger.info(f"Starting ultra-simple training for user {user_id}, machine {machine_id}")
-        logger.info(f"Using sensor columns: {sensor_columns}")
         
         # Create trainer and start training
         trainer = UltraSimpleTrainer(user_id, machine_id)
