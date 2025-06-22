@@ -2690,3 +2690,28 @@ a:hover {
     40% { content: '..'; }
     60%, 100% { content: '...'; }
 }
+
+/* Sensor Warning */
+.sensor-warning {
+    background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+    border: 1px solid #ffc107;
+    border-radius: 8px;
+    padding: 1rem;
+    margin: 1rem 0;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: #856404;
+    font-size: 0.9rem;
+    box-shadow: 0 2px 4px rgba(255, 193, 7, 0.2);
+}
+
+.sensor-warning i {
+    color: #ffc107;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+.sensor-warning span {
+    line-height: 1.4;
+}

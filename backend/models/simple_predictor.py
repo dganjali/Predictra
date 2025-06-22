@@ -86,11 +86,26 @@ class UltraSimplePredictor:
         try:
             # Select only the sensor columns that exist in the data
             available_columns = [col for col in self.sensor_columns if col in data.columns]
+            missing_columns = [col for col in self.sensor_columns if col not in data.columns]
+            
+            if missing_columns:
+                logger.warning(f"Missing sensor columns: {missing_columns}")
+                logger.info(f"Available columns: {list(data.columns)}")
+                logger.info(f"Expected columns: {self.sensor_columns}")
+            
             if not available_columns:
-                raise ValueError(f"No sensor columns found in data. Available: {list(data.columns)}")
+                raise ValueError(f"No sensor columns found in data. Available: {list(data.columns)}, Expected: {self.sensor_columns}")
             
             # Select data
             df_sensors = data[available_columns].copy()
+            
+            # Add missing columns with default values
+            for col in missing_columns:
+                df_sensors[col] = 0.0  # Default value for missing sensors
+                logger.info(f"Added missing column '{col}' with default value 0.0")
+            
+            # Reorder columns to match expected order
+            df_sensors = df_sensors[self.sensor_columns]
             
             # Handle missing values
             df_sensors = df_sensors.fillna(method='ffill').fillna(method='bfill')

@@ -331,108 +331,129 @@ router.post('/machine/:machineId/train', auth, upload.single('csvFile'), async (
 router.get('/machine/:machineId/status', auth, async (req, res) => {
     const { machineId } = req.params;
 
-    // Set up SSE headers
-    res.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-        'Access-Control-Allow-Origin': '*'
-    });
-
-    // Send initial status
-    res.write(`data: ${JSON.stringify({
-        success: true,
-        status: 'running',
-        progress: 0,
-        message: 'Starting training...'
-    })}\n\n`);
-
-    // Run Python training script
-    const pythonScript = path.join(__dirname, '../models/simple_trainer.py');
-    const pythonProcess = spawn('python3', [pythonScript, req.user._id, machineId, req.file.path], {
-        env: {
-            ...process.env,
-            SENSOR_COLUMNS: JSON.stringify(parsedColumns)
+    try {
+        // Get the machine to access its training data path
+        const machine = await Machine.findOne({ _id: machineId, userId: req.user._id });
+        if (!machine) {
+            return res.status(404).json({ success: false, message: 'Machine not found' });
         }
-    });
 
-    let output = '';
+        if (!machine.training_data_path) {
+            return res.status(400).json({ success: false, message: 'No training data found for this machine' });
+        }
 
-    pythonProcess.stdout.on('data', (data) => {
-        const chunk = data.toString();
-        output += chunk;
-        
-        // Parse each line for real-time updates
-        const lines = chunk.split('\n');
-        for (const line of lines) {
-            const trimmedLine = line.trim();
-            if (!trimmedLine) continue;
-            
-            try {
-                const parsed = JSON.parse(trimmedLine);
-                
-                if (parsed.type === 'progress') {
-                    // Send progress update
-                    res.write(`data: ${JSON.stringify({
-                        success: true,
-                        status: 'running',
-                        progress: parsed.progress,
-                        message: parsed.message
-                    })}\n\n`);
-                } else if (parsed.type === 'message') {
-                    // Send detailed message
-                    res.write(`data: ${JSON.stringify({
-                        success: true,
-                        status: 'running',
-                        detailedMessage: {
-                            timestamp: new Date().toISOString(),
-                            message: parsed.message,
-                            type: parsed.message_type || 'info'
-                        }
-                    })}\n\n`);
-                }
-            } catch (e) {
-                // Not JSON, ignore - this is normal for log messages
+        // Set up SSE headers
+        res.writeHead(200, {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'Access-Control-Allow-Origin': '*'
+        });
+
+        // Send initial status
+        res.write(`data: ${JSON.stringify({
+            success: true,
+            status: 'running',
+            progress: 0,
+            message: 'Starting training...'
+        })}\n\n`);
+
+        // Run Python training script
+        const pythonScript = path.join(__dirname, '../models/simple_trainer.py');
+        const pythonProcess = spawn('python3', [pythonScript, req.user._id, machineId, machine.training_data_path], {
+            env: {
+                ...process.env,
+                SENSOR_COLUMNS: JSON.stringify(machine.training_columns || [])
             }
-        }
-    });
+        });
 
-    pythonProcess.stderr.on('data', (data) => {
-        console.error(`[Python stderr for ${machineId}]: ${data.toString()}`);
-    });
+        let output = '';
 
-    pythonProcess.on('close', (code) => {
-        console.log(`[Python process for ${machineId} exited with code ${code}`);
-        
-        if (code === 0) {
-            // Training completed successfully
-            res.write(`data: ${JSON.stringify({
-                success: true,
-                status: 'completed',
-                progress: 100,
-                message: 'Training completed successfully!'
-            })}\n\n`);
-        } else {
-            // Training failed
+        pythonProcess.stdout.on('data', (data) => {
+            const chunk = data.toString();
+            output += chunk;
+            
+            // Parse each line for real-time updates
+            const lines = chunk.split('\n');
+            for (const line of lines) {
+                const trimmedLine = line.trim();
+                if (!trimmedLine) continue;
+                
+                try {
+                    const parsed = JSON.parse(trimmedLine);
+                    
+                    if (parsed.type === 'progress') {
+                        // Send progress update
+                        res.write(`data: ${JSON.stringify({
+                            success: true,
+                            status: 'running',
+                            progress: parsed.progress,
+                            message: parsed.message
+                        })}\n\n`);
+                    } else if (parsed.type === 'message') {
+                        // Send detailed message
+                        res.write(`data: ${JSON.stringify({
+                            success: true,
+                            status: 'running',
+                            detailedMessage: {
+                                timestamp: new Date().toISOString(),
+                                message: parsed.message,
+                                type: parsed.message_type || 'info'
+                            }
+                        })}\n\n`);
+                    }
+                } catch (e) {
+                    // Not JSON, ignore - this is normal for log messages
+                }
+            }
+        });
+
+        pythonProcess.stderr.on('data', (data) => {
+            console.error(`[Python stderr for ${machineId}]: ${data.toString()}`);
+        });
+
+        pythonProcess.on('close', (code) => {
+            console.log(`[Python process for ${machineId} exited with code ${code}`);
+            
+            if (code === 0) {
+                // Training completed successfully
+                res.write(`data: ${JSON.stringify({
+                    success: true,
+                    status: 'completed',
+                    progress: 100,
+                    message: 'Training completed successfully!'
+                })}\n\n`);
+            } else {
+                // Training failed
+                res.write(`data: ${JSON.stringify({
+                    success: false,
+                    status: 'failed',
+                    message: `Training failed with exit code ${code}`
+                })}\n\n`);
+            }
+            
+            res.end();
+        });
+
+        pythonProcess.on('error', (error) => {
+            console.error(`[Python process error for ${machineId}]:`, error);
             res.write(`data: ${JSON.stringify({
                 success: false,
                 status: 'failed',
-                message: `Training failed with exit code ${code}`
+                message: `Failed to start training: ${error.message}`
             })}\n\n`);
-        }
-        
-        res.end();
-    });
+            res.end();
+        });
 
-    pythonProcess.on('error', (error) => {
-        console.error(`[Python process error for ${machineId}]:`, error);
+    } catch (error) {
+        console.error(`Error in status route for machine ${machineId}:`, error);
         res.write(`data: ${JSON.stringify({
             success: false,
             status: 'failed',
-            message: `Failed to start training: ${error.message}`
+            message: `Error: ${error.message}`
         })}\n\n`);
         res.end();
-    });
+    }
 });
 
 // Get machine details and sensor data
@@ -613,13 +634,26 @@ router.post('/machine/:id/predict', auth, async (req, res) => {
 
         console.log(`📋 Ordered sensor data:`, orderedSensorData);
 
-        if (orderedSensorData.some(v => v === undefined)) {
-            const missing = expectedColumns.filter(col => !mappedSensorData.hasOwnProperty(col));
-            console.log(`❌ Missing required sensor data:`, missing);
-            return res.status(400).json({
-                success: false,
-                message: `Missing required sensor data. Please provide values for: ${missing.join(', ')}`
-            });
+        // Handle missing sensors by using default values
+        const finalSensorData = orderedSensorData.map((value, index) => {
+            if (value === undefined) {
+                const columnName = expectedColumns[index];
+                console.log(`⚠️  Missing sensor ${columnName}, using default value`);
+                // Use a default value based on typical sensor ranges
+                // This allows prediction to work even with missing sensors
+                return 0.0; // Default to 0 for missing sensors
+            }
+            return value;
+        });
+
+        console.log(`✅ Final sensor data with defaults:`, finalSensorData);
+
+        // Check if any sensors were missing
+        const missingSensors = expectedColumns.filter(col => !mappedSensorData.hasOwnProperty(col));
+        const hasMissingSensors = missingSensors.length > 0;
+        
+        if (hasMissingSensors) {
+            console.log(`⚠️  Warning: Using default values for missing sensors: ${missingSensors.join(', ')}`);
         }
         // --- End Validation ---
 
@@ -630,7 +664,7 @@ router.post('/machine/:id/predict', auth, async (req, res) => {
         }
         const sequenceFilePath = path.join(tempDir, `predict_sequence_${machine._id}_${Date.now()}.json`);
         // Write the ordered array to the file, not the original object
-        fs.writeFileSync(sequenceFilePath, JSON.stringify(orderedSensorData));
+        fs.writeFileSync(sequenceFilePath, JSON.stringify(finalSensorData));
 
         // Start Python prediction process for CSV
         const pythonScriptPath = path.join(__dirname, '..', 'models', 'simple_predictor.py');
@@ -751,7 +785,9 @@ router.post('/machine/:id/predict', auth, async (req, res) => {
                             healthScore: healthScore,
                             rulEstimate: rulEstimate,
                             status: status,
-                            riskPercentage: riskPercentage
+                            riskPercentage: riskPercentage,
+                            missingSensors: hasMissingSensors ? missingSensors : [],
+                            sensorWarning: hasMissingSensors ? `Used default values for missing sensors: ${missingSensors.join(', ')}` : null
                         }
                     });
                 } else {

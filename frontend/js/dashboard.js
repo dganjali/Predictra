@@ -1340,6 +1340,22 @@ async function handleSinglePrediction(e) {
                 }
             }
             
+            // Show sensor warning if sensors are missing
+            if (result.data.sensorWarning) {
+                const warningDiv = document.createElement('div');
+                warningDiv.className = 'sensor-warning';
+                warningDiv.innerHTML = `
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span>${result.data.sensorWarning}</span>
+                `;
+                
+                // Insert warning after the result grid
+                const resultGrid = resultContainer.querySelector('.result-grid');
+                if (resultGrid) {
+                    resultGrid.parentNode.insertBefore(warningDiv, resultGrid.nextSibling);
+                }
+            }
+            
             resultContainer.style.display = 'block';
             
             // Update the machine in the allMachines array and refresh the display
