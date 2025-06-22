@@ -1,5 +1,5 @@
 # Predictive Maintenance Dashboard
-
+## Built by Danial Ganjali, Justin Rui, Arjan Waraich, Emerson Ni
 A full-stack web application for machine-specific Remaining Useful Lifetime (RUL) estimation using anomaly detection and Bayesian inference.
 
 ## 🚀 Features
