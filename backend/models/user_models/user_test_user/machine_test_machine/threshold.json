@@ -1,25 +1,10 @@
 {
-  "threshold": 1.0697027944728559,
-  "mae_threshold": 0.7625741984134864,
-  "mean_loss": 0.4070660718828024,
-  "max_loss": 3.1724275523038483,
-  "min_loss": 0.03865856958553848,
-  "std_loss": 0.3883061508141692,
-  "percentile_90": 0.7836960934788033,
-  "percentile_95": 1.0697027944728559,
-  "percentile_99": 2.1058350361530724,
-  "mae_stats": {
-    "mean": 0.4518263444966047,
-    "percentile_95": 0.7625741984134864
-  },
-  "model_info": {
-    "lstm_units": 20,
-    "sequence_length": 5,
-    "n_features": 10,
-    "training_samples": 2996,
-    "epochs_trained": 3,
-    "batch_size": 64,
-    "loss_function": "mse",
-    "training_time": "optimized_fast_training"
-  }
+  "threshold": 2.6659911898510686,
+  "mean_error": 1.0106306681194879,
+  "std_error": 0.8757928505362632,
+  "min_error": 0.020374921810507318,
+  "max_error": 4.220636768677898,
+  "percentile_90": 2.1071454873613713,
+  "percentile_95": 2.6659911898510686,
+  "percentile_99": 4.191004603506397
 }

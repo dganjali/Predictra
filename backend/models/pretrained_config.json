@@ -1,33 +1,42 @@
 {
   "pretrained_model": {
-    "source_data": "0.csv",
-    "threshold": 1.0697027944728559,
-    "mae_threshold": 0.7625741984134864,
-    "mean_loss": 0.4070660718828024,
-    "max_loss": 3.1724275523038483,
-    "min_loss": 0.03865856958553848,
-    "std_loss": 0.3883061508141692,
-    "percentile_90": 0.7836960934788033,
-    "percentile_95": 1.0697027944728559,
-    "percentile_99": 2.1058350361530724,
+    "source_data": "synthetic_pretrained_data",
+    "threshold": 0.9230364387408997,
+    "mae_threshold": 0.9230364387408997,
+    "mean_loss": 0.4609688896606432,
+    "max_loss": 2.08753751485741,
+    "min_loss": 0.03332141746809469,
+    "std_loss": 0.2462390487425944,
+    "percentile_90": 0.7884528226362958,
+    "percentile_95": 0.9230364387408997,
+    "percentile_99": 1.2225935800542354,
     "mae_stats": {
-      "mean": 0.4518263444966047,
-      "percentile_95": 0.7625741984134864
+      "mean": 0.5361916745447074,
+      "percentile_95": 1.3439275032974618
     },
     "model_info": {
-      "lstm_units": 20,
-      "sequence_length": 5,
-      "n_features": 10,
-      "training_samples": 2996,
-      "epochs_trained": 3,
+      "dense_units": [
+        64,
+        32,
+        16,
+        8,
+        16,
+        32,
+        64
+      ],
+      "n_features": 12,
+      "training_samples": 3000,
+      "epochs_trained": 5,
       "batch_size": 64,
       "loss_function": "mse",
-      "training_time": "optimized_fast_training"
+      "training_time": "pretrained_model_training"
     },
     "trained_columns": [
       "sensor_0_avg",
       "sensor_1_avg",
       "sensor_2_avg",
+      "sensor_3_avg",
+      "sensor_4_avg",
       "sensor_5_avg",
       "sensor_6_avg",
       "sensor_7_avg",
@@ -45,9 +54,7 @@
       "EPOCHS": 10,
       "PATIENCE": 5,
       "CLASSIFIER_THRESHOLD": 90,
-      "RUL_THRESHOLD": 90,
-      "classifier_summary": "Model: 'functional'...",
-      "regressor_summary": "Model: 'functional_1'..."
+      "RUL_THRESHOLD": 90
     }
   }
 }

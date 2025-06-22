@@ -33,6 +33,13 @@ const upload = multer({
     }
 });
 
+// Global variables for training monitoring
+let trainingProcess = null;
+let trainingStartTime = null;
+let trainingTimeout = null;
+let progressUpdateInterval = null;
+let lastProgressUpdate = null;
+
 // @route   GET /api/dashboard/overview
 // @desc    Get dashboard overview data
 // @access  Private
@@ -332,14 +339,10 @@ router.get('/machine/:machineId/status', auth, async (req, res) => {
     const { machineId } = req.params;
 
     try {
-        // Get the machine to access its training data path
+        // Get the machine to check its training status
         const machine = await Machine.findOne({ _id: machineId, userId: req.user._id });
         if (!machine) {
             return res.status(404).json({ success: false, message: 'Machine not found' });
-        }
-
-        if (!machine.training_data_path) {
-            return res.status(400).json({ success: false, message: 'No training data found for this machine' });
         }
 
         // Set up SSE headers
@@ -350,216 +353,84 @@ router.get('/machine/:machineId/status', auth, async (req, res) => {
             'Access-Control-Allow-Origin': '*'
         });
 
-        // Send initial status
+        // Send initial status from database
         res.write(`data: ${JSON.stringify({
             success: true,
-            status: 'running',
-            progress: 0,
-            message: 'Starting training...'
+            status: machine.training_status || 'not_started',
+            progress: machine.training_progress || 0,
+            message: machine.training_message || 'No training in progress'
         })}\n\n`);
 
-        // Set up fallback progress updates
-        let lastProgress = 0;
-        const fallbackInterval = setInterval(() => {
-            if (lastProgress < 90) {  // Don't go above 90% with fallback
-                lastProgress += 1;
+        // If training is not in progress, end the connection
+        if (machine.training_status !== 'in_progress' && machine.training_status !== 'pending') {
+            res.end();
+            return;
+        }
+
+        // Set up polling to check database for progress updates
+        const progressInterval = setInterval(async () => {
+            try {
+                // Get latest machine status from database
+                const updatedMachine = await Machine.findOne({ _id: machineId, userId: req.user._id });
+                if (!updatedMachine) {
+                    clearInterval(progressInterval);
+                    res.write(`data: ${JSON.stringify({
+                        success: false,
+                        status: 'failed',
+                        message: 'Machine not found'
+                    })}\n\n`);
+                    res.end();
+                    return;
+                }
+
+                // Send progress update
                 res.write(`data: ${JSON.stringify({
                     success: true,
-                    status: 'running',
-                    progress: lastProgress,
-                    message: 'Training in progress...'
+                    status: updatedMachine.training_status,
+                    progress: updatedMachine.training_progress || 0,
+                    message: updatedMachine.training_message || 'Training in progress...'
                 })}\n\n`);
-            }
-        }, 30000); // Send update every 30 seconds as fallback
 
-        // Set up timeout to prevent infinite hanging
-        const trainingTimeout = setTimeout(() => {
-            console.error(`Training timeout for machine ${machineId} after 10 minutes`);
-            clearInterval(fallbackInterval);
-            
-            // Kill the Python process if it's still running
-            if (pythonProcess && !pythonProcess.killed) {
-                pythonProcess.kill('SIGTERM');
-            }
-            
-            res.write(`data: ${JSON.stringify({
-                success: false,
-                status: 'failed',
-                message: 'Training timed out after 10 minutes. Please try again with a smaller dataset.'
-            })}\n\n`);
-            res.end();
-        }, 600000); // 10 minute timeout
-
-        // Run Python training script
-        const pythonScript = path.join(__dirname, '../models/simple_trainer.py');
-        const pythonProcess = spawn('python3', [pythonScript, req.user._id, machineId, machine.training_data_path], {
-            env: {
-                ...process.env,
-                SENSOR_COLUMNS: JSON.stringify(machine.training_columns || [])
-            },
-            // Set timeout for the process
-            timeout: 600000 // 10 minutes
-        });
-
-        let output = '';
-        let lastActivity = Date.now();
-
-        pythonProcess.stdout.on('data', (data) => {
-            const chunk = data.toString();
-            output += chunk;
-            lastActivity = Date.now(); // Update activity timestamp
-            
-            // Parse each line for real-time updates
-            const lines = chunk.split('\n');
-            for (const line of lines) {
-                const trimmedLine = line.trim();
-                if (!trimmedLine) continue;
-                
-                try {
-                    const parsed = JSON.parse(trimmedLine);
-                    
-                    if (parsed.type === 'progress') {
-                        // Update last progress to prevent fallback from overriding real progress
-                        lastProgress = parsed.progress;
-                        
-                        // Send progress update
-                        res.write(`data: ${JSON.stringify({
-                            success: true,
-                            status: 'running',
-                            progress: parsed.progress,
-                            message: parsed.message
-                        })}\n\n`);
-                        
-                        // Also update the machine in database
-                        updateProgress(machineId, parsed.progress, parsed.message);
-                        
-                    } else if (parsed.type === 'message') {
-                        // Send detailed message
-                        res.write(`data: ${JSON.stringify({
-                            success: true,
-                            status: 'running',
-                            detailedMessage: {
-                                timestamp: new Date().toISOString(),
-                                message: parsed.message,
-                                type: parsed.message_type || 'info'
-                            }
-                        })}\n\n`);
-                        
-                    } else if (parsed.type === 'heartbeat') {
-                        // Send heartbeat to keep connection alive
-                        res.write(`data: ${JSON.stringify({
-                            success: true,
-                            status: 'running',
-                            heartbeat: true
-                        })}\n\n`);
-                    }
-                } catch (e) {
-                    // Not JSON, ignore - this is normal for log messages
+                // If training is completed or failed, end the connection
+                if (updatedMachine.training_status === 'completed' || updatedMachine.training_status === 'failed') {
+                    clearInterval(progressInterval);
+                    res.end();
                 }
-            }
-        });
 
-        pythonProcess.stderr.on('data', (data) => {
-            console.error(`[Python stderr for ${machineId}]: ${data.toString()}`);
-            lastActivity = Date.now(); // Update activity timestamp
-        });
-
-        // Set up activity monitoring to detect if process is stuck
-        const activityMonitor = setInterval(() => {
-            const timeSinceLastActivity = Date.now() - lastActivity;
-            if (timeSinceLastActivity > 300000) { // 5 minutes without activity
-                console.error(`Training appears stuck for machine ${machineId} - no activity for 5 minutes`);
-                clearInterval(activityMonitor);
-                
-                // Kill the process and send error
-                if (pythonProcess && !pythonProcess.killed) {
-                    pythonProcess.kill('SIGTERM');
-                }
-                
+            } catch (error) {
+                console.error('Error polling training status:', error);
+                clearInterval(progressInterval);
                 res.write(`data: ${JSON.stringify({
                     success: false,
                     status: 'failed',
-                    message: 'Training appears to be stuck. Please try again with a smaller dataset.'
+                    message: 'Error checking training status'
                 })}\n\n`);
                 res.end();
             }
-        }, 60000); // Check every minute
+        }, 1000); // Reduced from 2000ms to 1000ms for faster updates
 
-        // Set up memory monitoring
-        const memoryMonitor = setInterval(() => {
-            const memUsage = process.memoryUsage();
-            const memUsageMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+        // Set up timeout to prevent infinite hanging
+        const trainingTimeout = setTimeout(() => {
+            console.error(`Training status timeout for machine ${machineId} after 3 minutes`);
+            clearInterval(progressInterval);
             
-            if (memUsageMB > 500) { // If using more than 500MB
-                console.warn(`High memory usage detected: ${memUsageMB}MB for machine ${machineId}`);
-                
-                // Force garbage collection if available
-                if (global.gc) {
-                    global.gc();
-                    console.log(`Garbage collection triggered for machine ${machineId}`);
-                }
-            }
-        }, 30000); // Check every 30 seconds
-
-        // Cleanup function
-        const cleanup = () => {
-            clearInterval(fallbackInterval);
-            clearTimeout(trainingTimeout);
-            clearInterval(activityMonitor);
-            clearInterval(memoryMonitor);
-            
-            // Force garbage collection
-            if (global.gc) {
-                global.gc();
-            }
-        };
-
-        // Update the close and error handlers to use cleanup
-        const originalCloseHandler = pythonProcess.on('close', (code) => {
-            cleanup();
-            
-            console.log(`[Python process for ${machineId} exited with code ${code}`);
-            
-            if (code === 0) {
-                // Training completed successfully
-                res.write(`data: ${JSON.stringify({
-                    success: true,
-                    status: 'completed',
-                    progress: 100,
-                    message: 'Training completed successfully!'
-                })}\n\n`);
-            } else {
-                // Training failed
-                res.write(`data: ${JSON.stringify({
-                    success: false,
-                    status: 'failed',
-                    message: `Training failed with exit code ${code}`
-                })}\n\n`);
-            }
-            
-            res.end();
-        });
-
-        const originalErrorHandler = pythonProcess.on('error', (error) => {
-            cleanup();
-            
-            console.error(`[Python process error for ${machineId}]:`, error);
             res.write(`data: ${JSON.stringify({
                 success: false,
                 status: 'failed',
-                message: `Failed to start training: ${error.message}`
+                message: 'Training status check timed out after 3 minutes.'
             })}\n\n`);
             res.end();
+        }, 180000); // Reduced from 10 minutes to 3 minutes
+
+        // Clean up on client disconnect
+        req.on('close', () => {
+            clearInterval(progressInterval);
+            clearTimeout(trainingTimeout);
         });
 
     } catch (error) {
-        console.error(`Error in status route for machine ${machineId}:`, error);
-        res.write(`data: ${JSON.stringify({
-            success: false,
-            status: 'failed',
-            message: `Error: ${error.message}`
-        })}\n\n`);
-        res.end();
+        console.error('Training status error:', error);
+        res.status(500).json({ success: false, message: `Server error: ${error.message}` });
     }
 });
 
@@ -1127,7 +998,7 @@ async function startUltraSimpleTraining(machine, user, csvFilePath) {
         let processStartTime = Date.now();
         
         // Monitor Python process output for progress updates
-        pythonProcess.stdout.on('data', (data) => {
+        pythonProcess.stdout.on('data', async (data) => {
             const output = data.toString();
             rawOutput += output;
             console.log(`[Python stdout for ${machineId}]: ${output.trim()}`);
@@ -1162,6 +1033,12 @@ async function startUltraSimpleTraining(machine, user, csvFilePath) {
                     }
                 }
                 
+                // Update machine progress in database
+                await Machine.findByIdAndUpdate(machineId, {
+                    training_progress: progress,
+                    training_message: message
+                });
+                
                 // Check if training completed successfully
                 if (progress >= 100) {
                     status = 'completed';
@@ -1173,17 +1050,6 @@ async function startUltraSimpleTraining(machine, user, csvFilePath) {
                 status = 'failed';
                 message = 'Error parsing training output';
             }
-            
-            // Send final status update
-            res.write(`data: ${JSON.stringify({
-                success: true,
-                status: status,
-                progress: progress,
-                message: message,
-                detailedMessages: detailedMessages
-            })}\n\n`);
-            
-            res.end();
         });
         
         pythonProcess.stderr.on('data', (data) => {
@@ -1193,14 +1059,14 @@ async function startUltraSimpleTraining(machine, user, csvFilePath) {
         
         // Add timeout to prevent hanging
         const trainingTimeout = setTimeout(() => {
-            console.error(`⏰ Training timeout for machine ${machineId} after 300 seconds`);
+            console.error(`⏰ Training timeout for machine ${machineId} after 120 seconds`);
             pythonProcess.kill('SIGTERM');
             Machine.findByIdAndUpdate(machineId, {
                 training_status: 'failed',
                 training_progress: 0,
                 training_message: 'Training timed out. Please try again with a smaller file.'
             });
-        }, 300000); // 5 minutes timeout
+        }, 120000); // Reduced from 300 seconds to 120 seconds (2 minutes)
         
         pythonProcess.on('close', async (code) => {
             clearTimeout(trainingTimeout);
@@ -1281,7 +1147,6 @@ async function startUltraSimpleTraining(machine, user, csvFilePath) {
                 
             } catch (error) {
                 console.error(`❌ Error processing training results for machine ${machineId}:`, error);
-                console.error('Raw output was:', rawOutput);
                 await Machine.findByIdAndUpdate(machineId, {
                     training_status: 'failed',
                     training_progress: 0,
@@ -1291,11 +1156,11 @@ async function startUltraSimpleTraining(machine, user, csvFilePath) {
         });
         
     } catch (error) {
-        console.error(`❌ Error starting training for machine ${machineId}:`, error);
+        console.error(`❌ Error starting ultra-simple training for machine ${machineId}:`, error);
         await Machine.findByIdAndUpdate(machineId, {
             training_status: 'failed',
             training_progress: 0,
-            training_message: `Training setup failed: ${error.message}`
+            training_message: `Training failed to start: ${error.message}`
         });
     }
 }
