@@ -980,7 +980,7 @@ async function pollMachineStatus(machineId) {
             // If training is complete or failed, stop polling
             if (data.status === 'completed' || data.status === 'failed') {
                 console.log(`Stopping polling for machine ${machineId}, status: ${data.status}`);
-                clearInterval(activePollers[machineId].intervalId);
+                clearInterval(activePollers[machineId]);
                 delete activePollers[machineId];
                 // Refresh the entire card to show final state
                 loadDashboardData();
@@ -988,12 +988,12 @@ async function pollMachineStatus(machineId) {
         } else {
             // Stop polling on error
             console.error(`Error fetching status for machine ${machineId}:`, data.message);
-            clearInterval(activePollers[machineId].intervalId);
+            clearInterval(activePollers[machineId]);
             delete activePollers[machineId];
         }
     } catch (error) {
         console.error(`Network error while polling for machine ${machineId}:`, error);
-        clearInterval(activePollers[machineId].intervalId);
+        clearInterval(activePollers[machineId]);
         delete activePollers[machineId];
     }
 }

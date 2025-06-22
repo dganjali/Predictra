@@ -1364,39 +1364,36 @@ function calculateHealthScore(riskScore, isAnomaly = false) {
 // Helper function to calculate health score using machine-specific parameters
 function calculateHealthScoreWithMachineParams(riskScore, isAnomaly = false, modelParams) {
     const threshold = modelParams.threshold || 1.0;
-    const normalizedRisk = Math.min(1.0, riskScore / threshold);
+    const MAX_HEALTH_SCORE = 100;
+
+    // The health score is inversely proportional to the risk score.
+    // A risk score at the threshold is considered a critical turning point.
+    // We can define health score as 100 when risk is 0, and let it drop as risk increases.
+    // Let's define a score at the threshold to be around 40 (entering critical).
     
     let healthScore;
-    if (isAnomaly) {
-        // If anomaly detected, health score is between 0-40
-        healthScore = Math.max(0, 40 - (normalizedRisk * 100));
+
+    if (riskScore < threshold) {
+        // If risk is below threshold, health is between 40 and 100.
+        // Scale it linearly in this range.
+        const riskRatio = riskScore / threshold;
+        healthScore = MAX_HEALTH_SCORE - (riskRatio * 60);
     } else {
-        // If normal, health score is between 60-100
-        // Adjusted to reflect new RUL thresholds: 150 is normal, <90 is unhealthy
-        if (normalizedRisk >= 0.9) {
-            // High risk (RUL < 90 days) - health score 0-40
-            healthScore = Math.max(0, 40 - (normalizedRisk - 0.9) * 400);
-        } else if (normalizedRisk >= 0.7) {
-            // Medium risk (RUL 90-150 days) - health score 40-80
-            healthScore = 40 + (0.9 - normalizedRisk) * 200;
-        } else {
-            // Low risk (RUL > 150 days) - health score 80-100
-            healthScore = 80 + (0.7 - normalizedRisk) * 100;
-        }
+        // If risk is above threshold, health is between 0 and 40.
+        // Let's make it decrease more slowly after the threshold.
+        const riskRatio = (riskScore - threshold) / threshold; // How far above threshold
+        healthScore = 40 - (riskRatio * 20);
     }
-    
-    return Math.round(healthScore);
+
+    // Ensure health score is within bounds [0, 100]
+    return Math.round(Math.max(0, Math.min(MAX_HEALTH_SCORE, healthScore)));
 }
 
 // Helper function to determine machine status
 function determineMachineStatus(healthScore) {
-    if (healthScore < 30) {
-        return 'critical';
-    } else if (healthScore < 60) {
-        return 'warning';
-    } else {
-        return 'healthy';
-    }
+    if (healthScore >= 80) return 'healthy';
+    else if (healthScore < 30) return 'critical';
+    else return 'warning';
 }
 
 // Get machine training parameters
