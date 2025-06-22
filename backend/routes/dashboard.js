@@ -990,7 +990,7 @@ async function startUltraSimpleTraining(machine, user, csvFilePath) {
             ...process.env, 
             PYTHONUNBUFFERED: '1',
             SENSOR_COLUMNS: JSON.stringify(selectedColumns),
-            MODEL_STORAGE_PATH: process.env.MODEL_STORAGE_PATH || path.join(__dirname, 'models')
+            MODEL_STORAGE_PATH: process.env.MODEL_STORAGE_PATH || path.join(__dirname, '..', 'models')
         };
         
         // Start Python training process
@@ -1715,7 +1715,7 @@ async function startPredictionWithStoredParams(machine, csvFilePath, customTimeo
             ...process.env, 
             PYTHONUNBUFFERED: '1',
             SENSOR_COLUMNS: JSON.stringify(trainedColumns),
-            MODEL_STORAGE_PATH: process.env.MODEL_STORAGE_PATH || path.join(__dirname, 'models'),
+            MODEL_STORAGE_PATH: process.env.MODEL_STORAGE_PATH || path.join(__dirname, '..', 'models'),
             MODEL_THRESHOLD: threshold.toString()
         };
         
