@@ -1680,7 +1680,15 @@ async function startPredictionWithStoredParams(machine, csvFilePath, customTimeo
         }
         
         // Create a smaller version of CSV for faster processing
-        const optimizedCsvPath = await createOptimizedCsvForPrediction(csvFilePath);
+        console.log(`📦 Attempting to optimize CSV file: ${csvFilePath}`);
+        let optimizedCsvPath;
+        try {
+            optimizedCsvPath = await createOptimizedCsvForPrediction(csvFilePath);
+            console.log(`📦 CSV optimization result: ${optimizedCsvPath ? 'optimized' : 'using original'}`);
+        } catch (csvOptError) {
+            console.error('⚠️ CSV optimization failed, using original file:', csvOptError.message);
+            optimizedCsvPath = null;
+        }
         const finalCsvPath = optimizedCsvPath || csvFilePath;
         
         // Get stored model parameters
@@ -1708,6 +1716,12 @@ async function startPredictionWithStoredParams(machine, csvFilePath, customTimeo
         // Prepare prediction parameters
         const pythonScriptPath = path.join(__dirname, '..', 'models', 'simple_predictor.py');
         
+        // Validate Python script exists
+        if (!fs.existsSync(pythonScriptPath)) {
+            throw new Error(`Python prediction script not found: ${pythonScriptPath}`);
+        }
+        console.log(`✅ Python script found: ${pythonScriptPath}`);
+        
         // Set environment variables for Python script
         const env = { 
             ...process.env, 
@@ -1720,15 +1734,20 @@ async function startPredictionWithStoredParams(machine, csvFilePath, customTimeo
         // Start Python prediction process
         console.log(`🚀 Starting Python prediction process: python3 ${pythonScriptPath} ${userId} ${machineId} ${finalCsvPath}`);
         
-        const pythonProcess = spawn('python3', [
-            pythonScriptPath, 
-            userId,
-            machineId,
-            finalCsvPath
-        ], {
-            stdio: ['pipe', 'pipe', 'pipe'],
-            env: env
-        });
+        let pythonProcess;
+        try {
+            pythonProcess = spawn('python3', [
+                pythonScriptPath, 
+                userId,
+                machineId,
+                finalCsvPath
+            ], {
+                stdio: ['pipe', 'pipe', 'pipe'],
+                env: env
+            });
+        } catch (spawnError) {
+            throw new Error(`Failed to start Python process: ${spawnError.message}`);
+        }
 
         let rawOutput = '';
         let processStartTime = Date.now();
@@ -1937,32 +1956,16 @@ async function createOptimizedCsvForPrediction(originalCsvPath) {
         
         console.log(`📦 Optimizing CSV file (${fileSizeInMB.toFixed(2)}MB) for faster prediction...`);
         
-        // Read first 1000 lines for prediction
-        const readline = require('readline');
         const optimizedPath = originalCsvPath.replace('.csv', '_optimized.csv');
         
-        const fileStream = fs.createReadStream(originalCsvPath);
-        const rl = readline.createInterface({
-            input: fileStream,
-            crlfDelay: Infinity
-        });
+        // Simple approach: just copy first 1000 lines
+        const fileContent = fs.readFileSync(originalCsvPath, 'utf8');
+        const lines = fileContent.split('\n');
+        const optimizedLines = lines.slice(0, 1000);
         
-        const writeStream = fs.createWriteStream(optimizedPath);
-        let lineCount = 0;
-        const maxLines = 1000;
+        fs.writeFileSync(optimizedPath, optimizedLines.join('\n'));
         
-        for await (const line of rl) {
-            writeStream.write(line + '\n');
-            lineCount++;
-            if (lineCount >= maxLines) {
-                break;
-            }
-        }
-        
-        writeStream.end();
-        rl.close();
-        
-        console.log(`✅ Created optimized CSV with ${lineCount} rows: ${optimizedPath}`);
+        console.log(`✅ Created optimized CSV with ${optimizedLines.length} rows: ${optimizedPath}`);
         return optimizedPath;
         
     } catch (error) {
