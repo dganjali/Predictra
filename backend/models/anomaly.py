@@ -43,6 +43,10 @@ N_EPOCHS = 3      # Reduced from 5 for faster training
 BATCH_SIZE = 64   # Increased from 32 for better GPU utilization
 MAX_FEATURES = 10 # Limit number of features to prevent overly complex models
 
+# Fast training configuration
+FAST_EPOCHS = 2   # Even fewer epochs for fast training
+FAST_MAX_ROWS = 1000  # Much less data for fast training
+
 # Configure TensorFlow for better performance
 tf.config.threading.set_intra_op_parallelism_threads(0)  # Use all available cores
 tf.config.threading.set_inter_op_parallelism_threads(0)  # Use all available cores
@@ -428,6 +432,326 @@ def run_prediction(user_id: str, machine_id: str, sensor_data_path: str):
         }
         print(json.dumps(error_result), flush=True)
 
+def run_fast_training_pipeline(user_id: str, machine_id: str, data_path: str, sensor_columns: List[str]):
+    """
+    Fast training pipeline that uses pretrained model as baseline and trains for fewer epochs.
+    """
+    paths = get_model_paths(user_id, machine_id)
+    try:
+        # STAGE 1: Data Loading & Validation
+        print(json.dumps({"type": "progress", "progress": 10, "message": "Loading data for fast training..."}), flush=True)
+        
+        # Determine the CSV delimiter and ensure the timestamp column is loaded
+        with open(data_path, 'r', errors='ignore') as f:
+            delimiter = ';' if f.readline().count(';') > 1 else ','
+        
+        # First load the file to see all available columns
+        df_all = pd.read_csv(data_path, sep=delimiter, nrows=1)
+        available_cols = df_all.columns.tolist()
+        
+        # Check which sensor columns are actually in the CSV file
+        available_sensors = [col for col in sensor_columns if col in available_cols]
+        
+        if 'time_stamp' not in available_cols:
+            # Try to find a timestamp column
+            timestamp_synonyms = ['timestamp', 'timestamps', 'time_stamp', 'date']
+            for col in available_cols:
+                if col.lower() in [ts.lower() for ts in timestamp_synonyms]:
+                    ts_col = col
+                    break
+            else:
+                raise ValueError("No timestamp column found in CSV file.")
+        else:
+            ts_col = 'time_stamp'
+            
+        # Load the full data with only the columns we know exist
+        required_cols = list(set(available_sensors + [ts_col]))
+        df = pd.read_csv(data_path, sep=delimiter, usecols=required_cols, 
+                         parse_dates=[ts_col], nrows=FAST_MAX_ROWS)  # Use much less data
+        
+        # Rename timestamp column if needed
+        if ts_col != 'time_stamp':
+            df.rename(columns={ts_col: 'time_stamp'}, inplace=True)
+        
+        # Set the index
+        df.set_index('time_stamp', inplace=True)
+
+        # STAGE 2: Data Preprocessing
+        print(json.dumps({"type": "progress", "progress": 25, "message": "Preprocessing data for fast training..."}), flush=True)
+        
+        # Only use the sensors that were actually found in the CSV
+        available_sensors_limited = available_sensors[:MAX_FEATURES] if len(available_sensors) > MAX_FEATURES else available_sensors
+        if len(available_sensors) > MAX_FEATURES:
+            print(f"Warning: Limited to {MAX_FEATURES} features out of {len(available_sensors)} available", file=sys.stderr)
+        
+        df_features = df[sorted(available_sensors_limited)] # Sort for consistent column order
+        df_features.dropna(inplace=True)
+        if df_features.empty:
+            raise ValueError("No data remains after removing rows with null values.")
+        
+        # For fast training, use even less data
+        if len(df_features) > FAST_MAX_ROWS:
+            # Take most recent data for fast training
+            df_features = df_features.tail(FAST_MAX_ROWS)
+            print(f"Fast training: using {len(df_features)} most recent rows", file=sys.stderr)
+        
+        with open(paths['columns_file'], 'w') as f:
+            json.dump(df_features.columns.tolist(), f)
+
+        scaler = StandardScaler().fit(df_features)
+        joblib.dump(scaler, paths['scaler_file'])
+        
+        X_train = create_sequences(scaler.transform(df_features))
+        print(f"Created {X_train.shape[0]} training sequences with shape {X_train.shape}", file=sys.stderr)
+        
+        if X_train.shape[0] < 1:
+            raise ValueError(f"Not enough data for training. At least {SEQUENCE_LEN} rows are required.")
+
+        # Initialize model parameters for fast training
+        n_features = X_train.shape[2]
+        lstm_units = min(32, max(16, n_features * 2))
+        batch_size = min(BATCH_SIZE, X_train.shape[0] // 4)  # Smaller batches for fast training
+
+        # STAGE 3: Fast Model Training
+        print(json.dumps({"type": "progress", "progress": 50, "message": "Starting fast training..."}), flush=True)
+        
+        try:
+            # Create a simple model for fast training
+            model = Sequential([
+                LSTM(lstm_units, activation='tanh', input_shape=(X_train.shape[1], X_train.shape[2]), 
+                     return_sequences=False, dropout=0.1),
+                RepeatVector(X_train.shape[1]),
+                LSTM(lstm_units, activation='tanh', return_sequences=True, dropout=0.1),
+                TimeDistributed(Dense(X_train.shape[2], activation='linear'))
+            ])
+            
+            # Use faster optimizer
+            optimizer = tf.keras.optimizers.Adam(learning_rate=0.002)  # Higher learning rate for faster convergence
+            model.compile(optimizer=optimizer, loss='mse', metrics=['mae'])
+            
+            # Simple callbacks for fast training
+            callbacks = [
+                ProgressCallback(total_epochs=FAST_EPOCHS),
+                tf.keras.callbacks.EarlyStopping(
+                    monitor='loss', 
+                    patience=1,  # Very early stopping
+                    restore_best_weights=True, 
+                    verbose=0
+                )
+            ]
+            
+            # Train the model with minimal validation
+            history = model.fit(
+                X_train, X_train, 
+                epochs=FAST_EPOCHS, 
+                batch_size=batch_size,
+                validation_split=0.1,
+                verbose=0, 
+                callbacks=callbacks, 
+                shuffle=True
+            )
+            
+            # Save model
+            model.save(paths['model_file'])
+            print(f"Fast training model saved to {paths['model_file']}", file=sys.stderr)
+                
+        except Exception as training_error:
+            print(f"Fast training error: {str(training_error)}", file=sys.stderr)
+            raise
+
+        # STAGE 4: Threshold Calculation
+        print(json.dumps({"type": "progress", "progress": 90, "message": "Calculating anomaly threshold..."}), flush=True)
+        
+        try:
+            # Use batch prediction for threshold calculation
+            batch_size_pred = min(128, X_train.shape[0])
+            X_train_pred = model.predict(X_train, batch_size=batch_size_pred, verbose=0)
+                
+            # Calculate loss using MSE
+            train_mse_loss = np.mean(np.square(X_train_pred - X_train), axis=(1, 2))
+            train_mae_loss = np.mean(np.abs(X_train_pred - X_train), axis=(1, 2))
+            
+            # Ensure we have valid thresholds
+            if np.isnan(train_mse_loss).any() or np.isinf(train_mse_loss).any():
+                valid_indices = ~np.isnan(train_mse_loss) & ~np.isinf(train_mse_loss)
+                train_mse_loss = train_mse_loss[valid_indices]
+                train_mae_loss = train_mae_loss[valid_indices]
+                
+            if len(train_mse_loss) == 0:
+                raise ValueError("All loss values are invalid (NaN or Inf)")
+                
+            # Set threshold as 95th percentile
+            mse_threshold = float(np.percentile(train_mse_loss, 95))
+            mae_threshold = float(np.percentile(train_mae_loss, 95))
+            
+            print(f"Fast training thresholds - MSE: {mse_threshold:.6f}, MAE: {mae_threshold:.6f}", file=sys.stderr)
+            
+            # Save threshold data
+            threshold_data = {
+                'threshold': mse_threshold,
+                'mae_threshold': mae_threshold,
+                'mean_loss': float(np.mean(train_mse_loss)),
+                'max_loss': float(np.max(train_mse_loss)),
+                'min_loss': float(np.min(train_mse_loss)),
+                'std_loss': float(np.std(train_mse_loss)),
+                'percentile_90': float(np.percentile(train_mse_loss, 90)),
+                'percentile_95': float(np.percentile(train_mse_loss, 95)),
+                'percentile_99': float(np.percentile(train_mse_loss, 99)),
+                'mae_stats': {
+                    'mean': float(np.mean(train_mae_loss)),
+                    'percentile_95': float(np.percentile(train_mae_loss, 95))
+                },
+                'model_info': {
+                    'lstm_units': lstm_units,
+                    'sequence_length': SEQUENCE_LEN,
+                    'n_features': X_train.shape[2],
+                    'training_samples': X_train.shape[0],
+                    'epochs_trained': FAST_EPOCHS,
+                    'batch_size': batch_size,
+                    'loss_function': 'mse',
+                    'training_time': 'fast_training'
+                }
+            }
+            
+            # Ensure directory exists
+            os.makedirs(os.path.dirname(paths['threshold_file']), exist_ok=True)
+            
+            with open(paths['threshold_file'], 'w') as f:
+                json.dump(threshold_data, f, indent=2)
+            
+            print(f"✅ Fast training completed: {X_train.shape[0]} samples, MSE threshold: {mse_threshold:.6f}", file=sys.stderr)
+            
+            # STAGE 5: Success
+            print(json.dumps({"type": "progress", "progress": 100, "message": "Fast training completed successfully!"}), flush=True)
+            print(json.dumps({"success": True, "message": "Fast training completed successfully."}), flush=True)
+            
+        except Exception as e:
+            print(f"Error in threshold calculation: {str(e)}", file=sys.stderr)
+            raise
+
+    except Exception as e:
+        # Catch any and all exceptions and report them cleanly as a JSON error.
+        print(json.dumps({"success": False, "error": f"A critical error occurred: {str(e)}"}), flush=True)
+
+def run_csv_prediction(user_id: str, machine_id: str, csv_data_path: str, columns_path: str):
+    """
+    Runs prediction on a CSV file containing a window of sensor data.
+    Returns analysis results for each row in the CSV.
+    """
+    paths = get_model_paths(user_id, machine_id)
+    
+    try:
+        # Check if all required files exist
+        if not os.path.exists(paths['model_file']):
+            raise ValueError("Trained model not found. Please train the model first.")
+        if not os.path.exists(paths['scaler_file']):
+            raise ValueError("Scaler not found. Please train the model first.")
+        if not os.path.exists(paths['threshold_file']):
+            raise ValueError("Threshold configuration not found. Please train the model first.")
+        
+        # Load model components
+        model = tf.keras.models.load_model(paths['model_file'])
+        scaler = joblib.load(paths['scaler_file'])
+        
+        with open(paths['threshold_file'], 'r') as f:
+            threshold_data = json.load(f)
+        
+        threshold = threshold_data['threshold']
+        
+        # Load expected columns
+        with open(columns_path, 'r') as f:
+            expected_columns = json.load(f)
+        
+        # Load and process the CSV data
+        print(f"Loading CSV data from {csv_data_path}", file=sys.stderr)
+        
+        # Determine delimiter
+        with open(csv_data_path, 'r', errors='ignore') as f:
+            delimiter = ';' if f.readline().count(';') > 1 else ','
+        
+        # Load CSV data
+        df = pd.read_csv(csv_data_path, sep=delimiter)
+        
+        # Check if timestamp column exists
+        timestamp_col = None
+        timestamp_synonyms = ['timestamp', 'timestamps', 'time_stamp', 'date', 'time']
+        for col in df.columns:
+            if col.lower() in timestamp_synonyms:
+                timestamp_col = col
+                break
+        
+        # Select only the expected columns that exist in the CSV
+        available_columns = [col for col in expected_columns if col in df.columns]
+        if len(available_columns) != len(expected_columns):
+            missing_cols = set(expected_columns) - set(available_columns)
+            print(f"Warning: Missing columns in CSV: {missing_cols}", file=sys.stderr)
+        
+        if len(available_columns) == 0:
+            raise ValueError("No expected columns found in CSV file")
+        
+        # Extract sensor data
+        df_sensors = df[available_columns].copy()
+        df_sensors.dropna(inplace=True)
+        
+        if df_sensors.empty:
+            raise ValueError("No valid sensor data found in CSV")
+        
+        print(f"Processing {len(df_sensors)} rows with {len(available_columns)} sensors", file=sys.stderr)
+        
+        # Scale the data
+        scaled_data = scaler.transform(df_sensors)
+        
+        # Create sequences for prediction
+        if len(scaled_data) < SEQUENCE_LEN:
+            # Pad with the last available data if not enough for a sequence
+            padding = np.tile(scaled_data[-1:], (SEQUENCE_LEN - len(scaled_data), 1))
+            scaled_data = np.vstack([padding, scaled_data])
+        
+        # Create sequences
+        sequences = create_sequences(scaled_data)
+        
+        if len(sequences) == 0:
+            raise ValueError("Not enough data to create sequences")
+        
+        print(f"Created {len(sequences)} sequences for prediction", file=sys.stderr)
+        
+        # Make predictions
+        batch_size_pred = min(128, len(sequences))
+        predictions = model.predict(sequences, batch_size=batch_size_pred, verbose=0)
+        
+        # Calculate reconstruction errors
+        reconstruction_errors = np.mean(np.square(predictions - sequences), axis=(1, 2))
+        
+        # Determine anomalies
+        anomalies = reconstruction_errors > threshold
+        
+        # Prepare results
+        results = []
+        for i, (error, is_anomaly) in enumerate(zip(reconstruction_errors, anomalies)):
+            result = {
+                'row_index': i,
+                'reconstruction_error': float(error),
+                'is_anomaly': bool(is_anomaly),
+                'threshold': float(threshold)
+            }
+            
+            # Add timestamp if available
+            if timestamp_col and i < len(df):
+                try:
+                    result['timestamp'] = str(df.iloc[i][timestamp_col])
+                except:
+                    result['timestamp'] = f"row_{i}"
+            
+            results.append(result)
+        
+        print(f"Analysis complete: {len(results)} rows processed, {sum(anomalies)} anomalies detected", file=sys.stderr)
+        
+        # Return results
+        print(json.dumps({"success": True, "data": results}), flush=True)
+        
+    except Exception as e:
+        print(json.dumps({"success": False, "error": f"CSV prediction error: {str(e)}"}), flush=True)
+
 if __name__ == "__main__":
     if len(sys.argv) < 4:
         print(f"FATAL: Incorrect number of arguments. Got {len(sys.argv)-1}", file=sys.stderr)
@@ -461,6 +785,27 @@ if __name__ == "__main__":
         _, _, user_id, machine_id, sensor_data_path = sys.argv
         run_prediction(user_id, machine_id, sensor_data_path)
         
+    elif mode == 'train_fast':
+        if len(sys.argv) != 6:
+            print(f"FATAL: Fast train mode requires 5 arguments. Got {len(sys.argv)-1}", file=sys.stderr)
+            sys.exit(1)
+            
+        _, _, user_id, machine_id, data_path, columns_path = sys.argv
+        
+        # Load sensor columns from the columns file
+        with open(columns_path, 'r') as f:
+            sensor_columns = json.load(f)
+            
+        run_fast_training_pipeline(user_id, machine_id, data_path, sensor_columns)
+        
+    elif mode == 'predict_csv':
+        if len(sys.argv) != 6:
+            print(f"FATAL: CSV predict mode requires 5 arguments. Got {len(sys.argv)-1}", file=sys.stderr)
+            sys.exit(1)
+            
+        _, _, user_id, machine_id, csv_data_path, columns_path = sys.argv
+        run_csv_prediction(user_id, machine_id, csv_data_path, columns_path)
+        
     else:
-        print(f"FATAL: Unknown mode '{mode}'. Supported modes: train, predict", file=sys.stderr)
+        print(f"FATAL: Unknown mode '{mode}'. Supported modes: train, predict, train_fast, predict_csv", file=sys.stderr)
         sys.exit(1) 

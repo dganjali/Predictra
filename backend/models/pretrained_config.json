@@ -37,6 +37,17 @@
       "sensor_11_avg"
     ],
     "model_path": "user_models/user_test_user/machine_test_machine/model.h5",
-    "scaler_path": "user_models/user_test_user/machine_test_machine/scaler.pkl"
+    "scaler_path": "user_models/user_test_user/machine_test_machine/scaler.pkl",
+    "rul_parameters": {
+      "WINDOW_SIZE": 100,
+      "DROPOUT_RATE": 0.2,
+      "BATCH_SIZE": 32,
+      "EPOCHS": 10,
+      "PATIENCE": 5,
+      "CLASSIFIER_THRESHOLD": 90,
+      "RUL_THRESHOLD": 90,
+      "classifier_summary": "Model: 'functional'...",
+      "regressor_summary": "Model: 'functional_1'..."
+    }
   }
 }

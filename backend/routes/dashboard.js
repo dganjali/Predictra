@@ -609,67 +609,31 @@ router.post('/machine/:id/predict', auth, async (req, res) => {
                     const riskScore = result.data.reconstruction_error;
                     const isAnomaly = result.data.is_anomaly;
                     
-                    // Convert risk score to health score (inverse relationship)
-                    // Higher risk = lower health score
-                    let healthScore;
-                    if (isAnomaly) {
-                        // If anomaly detected, health score is between 0-40
-                        healthScore = Math.max(0, 40 - (riskScore * 100));
-                    } else {
-                        // If normal, health score is between 60-100
-                        healthScore = Math.min(100, 100 - (riskScore * 50));
-                    }
+                    // Calculate RUL and health score using the new helper functions
+                    const { rulEstimate, riskPercentage } = calculateRUL(riskScore, isAnomaly);
+                    const healthScore = calculateHealthScore(riskScore, isAnomaly);
                     
-                    // Calculate RUL based on the provided parameters
-                    const RUL_THRESHOLD = 90;
-                    const CLASSIFIER_THRESHOLD = 90;
-                    const WINDOW_SIZE = 100;
-                    
-                    // Convert risk score to a percentage (0-100)
-                    const riskPercentage = Math.min(100, Math.max(0, riskScore * 100));
-                    
-                    // Calculate RUL based on risk percentage and thresholds
-                    let rulEstimate;
-                    if (riskPercentage >= RUL_THRESHOLD) {
-                        // High risk - low RUL (0-30 days)
-                        rulEstimate = Math.max(0, 30 - (riskPercentage - RUL_THRESHOLD) * 0.5);
-                    } else if (riskPercentage >= CLASSIFIER_THRESHOLD) {
-                        // Medium risk - moderate RUL (30-90 days)
-                        rulEstimate = 30 + (RUL_THRESHOLD - riskPercentage) * 2;
-                    } else {
-                        // Low risk - high RUL (90-365 days)
-                        rulEstimate = 90 + (CLASSIFIER_THRESHOLD - riskPercentage) * 3;
-                    }
-                    
-                    // Ensure RUL is within reasonable bounds (0-365 days)
-                    rulEstimate = Math.max(0, Math.min(365, rulEstimate));
-                    
-                    // Update machine status based on health score
-                    let status = 'healthy';
-                    if (healthScore < 30) {
-                        status = 'critical';
-                    } else if (healthScore < 60) {
-                        status = 'warning';
-                    }
+                    // Determine machine status
+                    const status = determineMachineStatus(healthScore);
                     
                     // Update the machine in database
                     await Machine.findByIdAndUpdate(machine._id, {
-                        healthScore: Math.round(healthScore),
-                        rulEstimate: Math.round(rulEstimate),
+                        healthScore: healthScore,
+                        rulEstimate: rulEstimate,
                         status: status,
                         lastUpdated: new Date()
                     });
                     
-                    console.log(`Updated machine ${machine._id}: healthScore=${Math.round(healthScore)}, rulEstimate=${Math.round(rulEstimate)}, status=${status}`);
+                    console.log(`Updated machine ${machine._id}: healthScore=${healthScore}, rulEstimate=${rulEstimate}, status=${status}`);
                     
                     res.json({ 
                         success: true, 
                         data: {
                             ...result.data,
-                            healthScore: Math.round(healthScore),
-                            rulEstimate: Math.round(rulEstimate),
+                            healthScore: healthScore,
+                            rulEstimate: rulEstimate,
                             status: status,
-                            riskPercentage: Math.round(riskPercentage)
+                            riskPercentage: riskPercentage
                         }
                     });
                 } else {
@@ -858,7 +822,7 @@ async function trainModelWithCSV(machine, user, csvFilePath) {
     const userId = user._id.toString();
     
     try {
-        console.log(`🏋️ Starting real training for machine ${machineId} using CSV: ${csvFilePath}`);
+        console.log(`🏋️ Starting fast training for machine ${machineId} using CSV: ${csvFilePath}`);
         
         // Update progress: Starting
         await Machine.findByIdAndUpdate(machineId, {
@@ -878,17 +842,16 @@ async function trainModelWithCSV(machine, user, csvFilePath) {
             training_message: 'Reading and preprocessing training data...'
         });
         
-        // Use streaming to read only the first 3MB of CSV data
+        // Use streaming to read only the first 1MB of CSV data for faster training
         const Papa = require('papaparse');
-        const readline = require('readline');
         
         // Get file size
         const stats = fs.statSync(csvFilePath);
         const fileSizeInMB = stats.size / (1024 * 1024);
         console.log(`📊 CSV file size: ${fileSizeInMB.toFixed(2)} MB`);
         
-        // Read only first 3MB of data
-        const maxBytesToRead = 3 * 1024 * 1024; // 3MB
+        // Read only first 1MB of data for faster training
+        const maxBytesToRead = 1 * 1024 * 1024; // 1MB
         const readStream = fs.createReadStream(csvFilePath, { 
             encoding: 'utf8',
             highWaterMark: 64 * 1024 // 64KB chunks
@@ -899,14 +862,14 @@ async function trainModelWithCSV(machine, user, csvFilePath) {
         let headers = null;
         let dataRows = [];
         
-        // Read file in chunks until we reach 3MB or end of file
+        // Read file in chunks until we reach 1MB or end of file
         for await (const chunk of readStream) {
             bytesRead += chunk.length;
             csvContent += chunk;
             
-            // Stop reading if we've reached 3MB
+            // Stop reading if we've reached 1MB
             if (bytesRead >= maxBytesToRead) {
-                console.log(`📊 Read ${(bytesRead / (1024 * 1024)).toFixed(2)} MB of data (limited to first 3MB)`);
+                console.log(`📊 Read ${(bytesRead / (1024 * 1024)).toFixed(2)} MB of data (limited to first 1MB for fast training)`);
                 break;
             }
         }
@@ -927,7 +890,7 @@ async function trainModelWithCSV(machine, user, csvFilePath) {
         dataRows = parseResult.data;
         
         console.log(`📋 CSV headers: ${headers.length} columns`);
-        console.log(`📊 Processed ${dataRows.length} rows from first 3MB of data`);
+        console.log(`📊 Processed ${dataRows.length} rows from first 1MB of data`);
         
         // Force garbage collection after processing
         forceGarbageCollection();
@@ -951,7 +914,7 @@ async function trainModelWithCSV(machine, user, csvFilePath) {
         // Update progress: Starting Python training
         await Machine.findByIdAndUpdate(machineId, {
             training_progress: 25,
-            training_message: 'Starting ML model training...'
+            training_message: 'Starting fast ML model training...'
         });
         
         // Prepare training parameters
@@ -968,33 +931,40 @@ async function trainModelWithCSV(machine, user, csvFilePath) {
         const columnsFilePath = path.join(tempDir, `columns_${machineId}_${Date.now()}.json`);
         fs.writeFileSync(columnsFilePath, JSON.stringify(selectedColumns));
         
-        // Start Python training process
+        // Start Python training process with fast training mode
+        console.log(`🚀 Starting Python process: python3 ${pythonScriptPath} train_fast ${userId} ${machineId} ${sampleCsvPath} ${columnsFilePath}`);
+        
         const pythonProcess = spawn('python3', [
             pythonScriptPath,
-            'train',
+            'train_fast',  // New fast training mode
             userId,
             machineId,
             sampleCsvPath,
             columnsFilePath
-        ]);
+        ], {
+            stdio: ['pipe', 'pipe', 'pipe'],
+            env: { ...process.env, PYTHONUNBUFFERED: '1' }
+        });
         
         let rawOutput = '';
         let lastProgress = 25;
+        let processStartTime = Date.now();
         
         // Monitor Python process output for progress updates
         pythonProcess.stdout.on('data', (data) => {
             const output = data.toString();
             rawOutput += output;
+            console.log(`[Python stdout for ${machineId}]: ${output.trim()}`);
             
             // Parse progress from Python output
-            if (output.includes('Starting training')) {
+            if (output.includes('Starting fast training')) {
                 lastProgress = 40;
-                updateProgress(machineId, lastProgress, 'Training neural network...');
+                updateProgress(machineId, lastProgress, 'Fast training neural network...');
             } else if (output.includes('Epoch')) {
-                lastProgress = Math.min(80, lastProgress + 5);
+                lastProgress = Math.min(80, lastProgress + 10); // Faster progress updates
                 const epochMatch = output.match(/Epoch (\d+)/);
                 const epoch = epochMatch ? epochMatch[1] : '?';
-                updateProgress(machineId, lastProgress, `Training epoch ${epoch}...`);
+                updateProgress(machineId, lastProgress, `Fast training epoch ${epoch}...`);
             } else if (output.includes('Saving model')) {
                 lastProgress = 90;
                 updateProgress(machineId, lastProgress, 'Saving trained model...');
@@ -1005,10 +975,26 @@ async function trainModelWithCSV(machine, user, csvFilePath) {
         });
         
         pythonProcess.stderr.on('data', (data) => {
-            console.error(`[Training Error for ${machineId}]: ${data.toString()}`);
+            const errorOutput = data.toString();
+            console.error(`[Training Error for ${machineId}]: ${errorOutput}`);
         });
         
+        // Add timeout to prevent hanging
+        const trainingTimeout = setTimeout(() => {
+            console.error(`⏰ Training timeout for machine ${machineId} after 60 seconds`);
+            pythonProcess.kill('SIGTERM');
+            Machine.findByIdAndUpdate(machineId, {
+                training_status: 'failed',
+                training_progress: 0,
+                training_message: 'Training timed out. Please try again with a smaller file.'
+            });
+        }, 60000); // 60 second timeout
+        
         pythonProcess.on('close', async (code) => {
+            clearTimeout(trainingTimeout);
+            const trainingDuration = Date.now() - processStartTime;
+            console.log(`⏱️ Training process for machine ${machineId} completed in ${trainingDuration}ms with exit code ${code}`);
+            
             // Clean up temporary files
             [sampleCsvPath, columnsFilePath].forEach(filePath => {
                 if (fs.existsSync(filePath)) {
@@ -1243,5 +1229,247 @@ router.post('/machine/:id/setup-pretrained', auth, async (req, res) => {
         res.status(500).json({ success: false, message: 'Server error during setup' });
     }
 });
+
+// @route   POST /api/dashboard/machine/:id/predict-csv
+// @desc    Get risk analysis for a CSV file containing sensor data window
+// @access  Private
+router.post('/machine/:id/predict-csv', auth, upload.single('csvFile'), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const csvFile = req.file;
+
+        console.log(`🔍 CSV Prediction request for machine ${id}`);
+        console.log(`📊 CSV file received:`, csvFile?.originalname);
+
+        const machine = await Machine.findById(id);
+        if (!machine) {
+            console.log(`❌ Machine ${id} not found`);
+            return res.status(404).json({ success: false, message: 'Machine not found' });
+        }
+        
+        if (machine.userId.toString() !== req.user._id.toString()) {
+            console.log(`❌ User not authorized for machine ${id}`);
+            return res.status(403).json({ success: false, message: 'User not authorized' });
+        }
+        
+        // Check if model is trained
+        const isTrained = machine.modelStatus === 'trained' || 
+                         machine.training_status === 'completed' ||
+                         (machine.model_params && machine.model_params.source === 'pre_trained_model');
+        
+        if (!isTrained) {
+            console.log(`❌ Model for machine ${id} is not trained yet`);
+            return res.status(400).json({ success: false, message: 'Model for this machine is not trained yet.' });
+        }
+
+        if (!csvFile) {
+            return res.status(400).json({ success: false, message: 'No CSV file provided.' });
+        }
+
+        // Process the CSV file for prediction
+        const csvFilePath = csvFile.path;
+        console.log(`📂 Processing CSV file: ${csvFilePath}`);
+
+        // Use pre-trained model configuration
+        const pretrainedConfigPath = path.join(__dirname, '../models/pretrained_config.json');
+        if (!fs.existsSync(pretrainedConfigPath)) {
+            return res.status(500).json({ success: false, message: 'Pre-trained model configuration not found.' });
+        }
+        
+        const pretrainedConfig = JSON.parse(fs.readFileSync(pretrainedConfigPath, 'utf8'));
+        const pretrained = pretrainedConfig.pretrained_model;
+        const expectedColumns = pretrained.trained_columns;
+
+        // Create a temporary columns file for the prediction
+        const tempDir = path.join(__dirname, '..', 'uploads', 'temp');
+        if (!fs.existsSync(tempDir)) {
+            fs.mkdirSync(tempDir, { recursive: true });
+        }
+        const columnsFilePath = path.join(tempDir, `predict_columns_${machine._id}_${Date.now()}.json`);
+        fs.writeFileSync(columnsFilePath, JSON.stringify(expectedColumns));
+
+        // Start Python prediction process for CSV
+        const pythonScriptPath = path.join(__dirname, '..', 'models', 'anomaly.py');
+        console.log(`🚀 Starting CSV prediction: python3 ${pythonScriptPath} predict_csv test_user test_machine ${csvFilePath} ${columnsFilePath}`);
+        
+        const pythonProcess = spawn('python3', [
+            pythonScriptPath, 
+            'predict_csv',
+            'test_user', // Use test_user for pre-trained model
+            'test_machine', // Use test_machine for pre-trained model
+            csvFilePath,
+            columnsFilePath
+        ], {
+            stdio: ['pipe', 'pipe', 'pipe'],
+            env: { ...process.env, PYTHONUNBUFFERED: '1' }
+        });
+
+        let rawOutput = '';
+        let processStartTime = Date.now();
+        
+        pythonProcess.stdout.on('data', (data) => {
+            const output = data.toString();
+            rawOutput += output;
+            console.log(`[Python stdout for CSV prediction]: ${output.trim()}`);
+        });
+
+        pythonProcess.stderr.on('data', (data) => {
+            console.error(`[CSV Prediction Error]: ${data.toString()}`);
+        });
+
+        // Add timeout for CSV prediction
+        const predictionTimeout = setTimeout(() => {
+            console.error(`⏰ CSV prediction timeout for machine ${id} after 120 seconds`);
+            pythonProcess.kill('SIGTERM');
+            res.status(500).json({ success: false, message: 'CSV prediction timed out. Please try with a smaller file.' });
+        }, 120000); // 2 minute timeout
+
+        pythonProcess.on('close', async (code) => {
+            clearTimeout(predictionTimeout);
+            const predictionDuration = Date.now() - processStartTime;
+            console.log(`⏱️ CSV prediction process completed in ${predictionDuration}ms with exit code ${code}`);
+
+            // Clean up temporary files
+            [csvFilePath, columnsFilePath].forEach(filePath => {
+                if (fs.existsSync(filePath)) {
+                    fs.unlink(filePath, (err) => {
+                        if (err) console.error(`Error deleting temp file ${filePath}:`, err);
+                    });
+                }
+            });
+
+            if (code !== 0) {
+                return res.status(500).json({ success: false, message: 'CSV prediction script failed.' });
+            }
+
+            try {
+                const result = JSON.parse(rawOutput);
+                if (result.success) {
+                    // Process the CSV prediction results
+                    const analysisResults = result.data;
+                    
+                    // Calculate overall risk metrics
+                    const totalReadings = analysisResults.length;
+                    const anomalyCount = analysisResults.filter(r => r.is_anomaly).length;
+                    const anomalyPercentage = (anomalyCount / totalReadings) * 100;
+                    
+                    // Calculate average risk score
+                    const avgRiskScore = analysisResults.reduce((sum, r) => sum + r.reconstruction_error, 0) / totalReadings;
+                    
+                    // Calculate RUL and health score using the new helper functions
+                    const { rulEstimate, riskPercentage } = calculateRUL(avgRiskScore, anomalyPercentage > 5);
+                    const healthScore = calculateHealthScore(avgRiskScore, anomalyPercentage > 5);
+                    const overallStatus = determineMachineStatus(healthScore);
+                    
+                    // Update the machine in database
+                    await Machine.findByIdAndUpdate(machine._id, {
+                        healthScore: healthScore,
+                        rulEstimate: rulEstimate,
+                        status: overallStatus,
+                        lastUpdated: new Date()
+                    });
+                    
+                    console.log(`Updated machine ${machine._id}: healthScore=${healthScore}, rulEstimate=${rulEstimate}, status=${overallStatus}`);
+                    
+                    res.json({ 
+                        success: true, 
+                        data: {
+                            analysisResults: analysisResults,
+                            summary: {
+                                totalReadings: totalReadings,
+                                anomalyCount: anomalyCount,
+                                anomalyPercentage: Math.round(anomalyPercentage * 100) / 100,
+                                avgRiskScore: Math.round(avgRiskScore * 10000) / 10000,
+                                healthScore: healthScore,
+                                rulEstimate: rulEstimate,
+                                status: overallStatus,
+                                riskPercentage: riskPercentage
+                            }
+                        }
+                    });
+                } else {
+                    res.status(500).json({ success: false, message: result.error || 'CSV prediction failed.' });
+                }
+            } catch (parseError) {
+                console.error('Error parsing CSV prediction output:', parseError);
+                res.status(500).json({ success: false, message: 'Error processing prediction results.' });
+            }
+        });
+
+    } catch (error) {
+        console.error(`❌ Error in CSV prediction for machine ${id}:`, error);
+        res.status(500).json({ success: false, message: `CSV prediction error: ${error.message}` });
+    }
+});
+
+// Helper function to calculate RUL using specific model parameters
+function calculateRUL(riskScore, isAnomaly = false) {
+    // Model parameters from the provided configuration
+    const WINDOW_SIZE = 100;
+    const DROPOUT_RATE = 0.2;
+    const BATCH_SIZE = 32;
+    const EPOCHS = 10;
+    const PATIENCE = 5;
+    const CLASSIFIER_THRESHOLD = 90;
+    const RUL_THRESHOLD = 90;
+    
+    // Convert risk score to a percentage (0-100)
+    const riskPercentage = Math.min(100, Math.max(0, riskScore * 100));
+    
+    // Calculate RUL based on risk percentage and thresholds
+    let rulEstimate;
+    if (riskPercentage >= RUL_THRESHOLD) {
+        // High risk - low RUL (0-30 days)
+        rulEstimate = Math.max(0, 30 - (riskPercentage - RUL_THRESHOLD) * 0.5);
+    } else if (riskPercentage >= CLASSIFIER_THRESHOLD) {
+        // Medium risk - moderate RUL (30-90 days)
+        rulEstimate = 30 + (RUL_THRESHOLD - riskPercentage) * 2;
+    } else {
+        // Low risk - high RUL (90-365 days)
+        rulEstimate = 90 + (CLASSIFIER_THRESHOLD - riskPercentage) * 3;
+    }
+    
+    // Ensure RUL is within reasonable bounds (0-365 days)
+    rulEstimate = Math.max(0, Math.min(365, rulEstimate));
+    
+    return {
+        rulEstimate: Math.round(rulEstimate),
+        riskPercentage: Math.round(riskPercentage),
+        modelParams: {
+            WINDOW_SIZE,
+            DROPOUT_RATE,
+            BATCH_SIZE,
+            EPOCHS,
+            PATIENCE,
+            CLASSIFIER_THRESHOLD,
+            RUL_THRESHOLD
+        }
+    };
+}
+
+// Helper function to calculate health score
+function calculateHealthScore(riskScore, isAnomaly = false) {
+    let healthScore;
+    if (isAnomaly) {
+        // If anomaly detected, health score is between 0-40
+        healthScore = Math.max(0, 40 - (riskScore * 100));
+    } else {
+        // If normal, health score is between 60-100
+        healthScore = Math.min(100, 100 - (riskScore * 50));
+    }
+    
+    return Math.round(healthScore);
+}
+
+// Helper function to determine machine status
+function determineMachineStatus(healthScore) {
+    if (healthScore < 30) {
+        return 'critical';
+    } else if (healthScore < 60) {
+        return 'warning';
+    } else {
+        return 'healthy';
+    }
+}
 
 module.exports = router;

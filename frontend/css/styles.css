@@ -2227,3 +2227,223 @@ a:hover {
     transform: scale(1.2);
     box-shadow: 0 0 10px rgba(37, 99, 235, 0.5);
 }
+
+/* Prediction Modal Styles */
+.prediction-mode-selector {
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+}
+
+.prediction-mode-selector h3 {
+    margin: 0 0 1rem 0;
+    color: #333;
+    font-size: 1.1rem;
+}
+
+.mode-options {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.mode-option {
+    flex: 1;
+    min-width: 200px;
+    cursor: pointer;
+}
+
+.mode-option input[type="radio"] {
+    display: none;
+}
+
+.mode-content {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.5rem;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    background: white;
+    transition: all 0.3s ease;
+}
+
+.mode-option input[type="radio"]:checked + .mode-content {
+    border-color: #007bff;
+    background: #f8f9ff;
+    box-shadow: 0 2px 8px rgba(0, 123, 255, 0.1);
+}
+
+.mode-content i {
+    font-size: 1.5rem;
+    color: #007bff;
+    width: 2rem;
+    text-align: center;
+}
+
+.mode-content h4 {
+    margin: 0 0 0.5rem 0;
+    color: #333;
+    font-size: 1rem;
+}
+
+.mode-content p {
+    margin: 0;
+    color: #666;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.prediction-form {
+    margin-top: 1.5rem;
+}
+
+.form-section {
+    margin-bottom: 1.5rem;
+}
+
+.form-section h3 {
+    margin: 0 0 1rem 0;
+    color: #333;
+    font-size: 1.1rem;
+}
+
+.form-description {
+    color: #666;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.form-text {
+    color: #666;
+    font-size: 0.8rem;
+    margin-top: 0.25rem;
+}
+
+/* CSV Analysis Results */
+.anomaly-details {
+    margin-top: 1.5rem;
+    padding: 1rem;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border: 1px solid #e9ecef;
+}
+
+.anomaly-details h4 {
+    margin: 0 0 1rem 0;
+    color: #333;
+    font-size: 1rem;
+}
+
+.anomaly-list {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    background: white;
+}
+
+.anomaly-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem;
+    border-bottom: 1px solid #f1f3f4;
+}
+
+.anomaly-item:last-child {
+    border-bottom: none;
+}
+
+.anomaly-item .timestamp {
+    font-weight: 500;
+    color: #333;
+}
+
+.anomaly-item .error-score {
+    color: #dc3545;
+    font-weight: 500;
+}
+
+.anomaly-item .row-index {
+    color: #666;
+    font-size: 0.9rem;
+}
+
+/* Enhanced Result Grid */
+.result-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.result-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border: 1px solid #e9ecef;
+}
+
+.result-item label {
+    font-weight: 500;
+    color: #333;
+    margin: 0;
+}
+
+.result-item span {
+    font-weight: 600;
+    color: #007bff;
+}
+
+/* Status Colors */
+.risk-score.high { color: #dc3545; }
+.risk-score.medium { color: #ffc107; }
+.risk-score.low { color: #28a745; }
+
+.anomaly-status.detected { color: #dc3545; }
+.anomaly-status.normal { color: #28a745; }
+
+.health-score.excellent { color: #28a745; }
+.health-score.good { color: #17a2b8; }
+.health-score.warning { color: #ffc107; }
+.health-score.critical { color: #dc3545; }
+
+.rul-estimate.high { color: #28a745; }
+.rul-estimate.medium { color: #ffc107; }
+.rul-estimate.low { color: #dc3545; }
+
+.risk-status.healthy { color: #28a745; }
+.risk-status.warning { color: #ffc107; }
+.risk-status.critical { color: #dc3545; }
+
+/* Modal Size Adjustments */
+.modal-content.large {
+    max-width: 800px;
+    width: 90%;
+}
+
+@media (max-width: 768px) {
+    .mode-options {
+        flex-direction: column;
+    }
+    
+    .mode-option {
+        min-width: auto;
+    }
+    
+    .result-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .modal-content.large {
+        width: 95%;
+        margin: 1rem;
+    }
+}

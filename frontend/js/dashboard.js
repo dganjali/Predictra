@@ -448,12 +448,12 @@ function initTrainMachineModal() {
         const file = event.target.files[0];
         if (!file) return;
         
-        // Check file size and inform about 3MB limit
+        // Check file size and inform about 1MB limit
         const fileSizeInMB = file.size / (1024 * 1024);
         console.log(`📁 File selected: ${file.name} (${fileSizeInMB.toFixed(2)} MB)`);
         
-        if (fileSizeInMB > 3) {
-            showMessage('Large file detected. Only the first 3MB of data will be used for training.', 'info');
+        if (fileSizeInMB > 1) {
+            showMessage('Large file detected. Only the first 1MB of data will be used for fast training.', 'info');
         }
         
         // Use Papa Parse with streaming for large files
@@ -1057,67 +1057,96 @@ function viewAnomalyData(machineId) {
 }
 
 function openPredictionModal(machineId) {
-    console.log('Opening prediction modal for machine:', machineId);
     currentPredictionMachineId = machineId;
     const machine = allMachines.find(m => m._id === machineId);
+    
     if (!machine) {
-        console.log('Machine not found in allMachines array');
-        console.log('Available machines:', allMachines.map(m => ({ id: m._id, name: m.machineName })));
-        showMessage('Could not find machine details.', 'error');
+        showMessage('Machine not found', 'error');
         return;
     }
-
-    console.log('Machine found:', machine);
-    console.log('Machine sensors:', machine.sensors);
-    console.log('Machine modelStatus:', machine.modelStatus);
-    console.log('Machine training_status:', machine.training_status);
-
-    // Check if machine is trained - check multiple possible status fields
+    
+    // Check if model is trained
     const isTrained = machine.modelStatus === 'trained' || 
                      machine.training_status === 'completed' ||
                      (machine.model_params && machine.model_params.source === 'pre_trained_model');
     
-    console.log('Is machine trained?', isTrained);
-    console.log('Model params:', machine.model_params);
-
     if (!isTrained) {
-        console.log('Machine model is not trained');
-        showMessage('This machine model is not trained yet. Please train the model first.', 'error');
+        showMessage('Model for this machine is not trained yet. Please train the model first.', 'error');
         return;
     }
-
-    const modalTitle = document.getElementById('predictionModalTitle');
-    const formBody = document.getElementById('predictionFormBody');
+    
     const modal = document.getElementById('predictionModal');
-    const resultContainer = document.getElementById('predictionResult');
-
-    if (!modal || !formBody || !modalTitle) {
-        console.error('Required modal elements not found');
-        showMessage('Error: Modal elements not found.', 'error');
-        return;
-    }
-
-    modalTitle.textContent = `Calculate Risk for ${machine.machineName}`;
-    resultContainer.style.display = 'none';
-
-    if (!machine.sensors || machine.sensors.length === 0) {
-        console.log('No sensors found for machine');
-        formBody.innerHTML = `<p class="text-center">This machine has no configured sensors for prediction.</p>`;
+    const modalTitle = document.getElementById('predictionModalTitle');
+    const predictionForm = document.getElementById('predictionForm');
+    const csvPredictionForm = document.getElementById('csvPredictionForm');
+    const predictionResult = document.getElementById('predictionResult');
+    const csvPredictionResult = document.getElementById('csvPredictionResult');
+    
+    // Reset modal state
+    modalTitle.textContent = `Calculate Risk Score - ${machine.machineName}`;
+    predictionForm.style.display = 'none';
+    csvPredictionForm.style.display = 'none';
+    predictionResult.style.display = 'none';
+    csvPredictionResult.style.display = 'none';
+    
+    // Show default form (single reading)
+    predictionForm.style.display = 'block';
+    
+    // Generate sensor inputs for single reading
+    const formBody = document.getElementById('predictionFormBody');
+    formBody.innerHTML = '';
+    
+    if (machine.sensors && machine.sensors.length > 0) {
+        machine.sensors.forEach(sensor => {
+            const inputGroup = document.createElement('div');
+            inputGroup.className = 'form-group';
+            inputGroup.innerHTML = `
+                <label for="sensor_${sensor.sensorId}">${sensor.name} ${sensor.unit ? `(${sensor.unit})` : ''}</label>
+                <input type="number" 
+                       id="sensor_${sensor.sensorId}" 
+                       name="${sensor.sensorId}" 
+                       class="form-control" 
+                       step="0.01" 
+                       required 
+                       placeholder="Enter ${sensor.name} value">
+            `;
+            formBody.appendChild(inputGroup);
+        });
     } else {
-        console.log('Generating form for sensors:', machine.sensors);
-        formBody.innerHTML = machine.sensors.map(sensor => `
-            <div class="form-group">
-                <label for="sensor-${sensor.sensorId}">${sensor.name} (${sensor.unit})</label>
-                <input type="number" step="any" id="sensor-${sensor.sensorId}" name="${sensor.sensorId}" required>
-            </div>
-        `).join('');
+        formBody.innerHTML = '<p class="text-muted">No sensors configured for this machine.</p>';
     }
-
+    
     modal.classList.add('show');
-    console.log('Prediction modal opened successfully');
+    
+    // Handle mode switching
+    const modeRadios = document.querySelectorAll('input[name="predictionMode"]');
+    modeRadios.forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            if (e.target.value === 'single') {
+                predictionForm.style.display = 'block';
+                csvPredictionForm.style.display = 'none';
+            } else {
+                predictionForm.style.display = 'none';
+                csvPredictionForm.style.display = 'block';
+            }
+        });
+    });
+    
+    // Handle form submissions
+    predictionForm.addEventListener('submit', handleSinglePrediction);
+    csvPredictionForm.addEventListener('submit', handleCsvPrediction);
+    
+    // Handle cancel buttons
+    document.getElementById('cancelPrediction').addEventListener('click', () => {
+        modal.classList.remove('show');
+    });
+    
+    document.getElementById('cancelCsvPrediction').addEventListener('click', () => {
+        modal.classList.remove('show');
+    });
 }
 
-async function handlePrediction(e) {
+async function handleSinglePrediction(e) {
     e.preventDefault();
     const form = e.target;
     const submitBtn = form.querySelector('button[type="submit"]');
@@ -1203,6 +1232,116 @@ async function handlePrediction(e) {
         submitBtn.classList.remove('loading');
         submitBtn.disabled = false;
         submitBtn.textContent = 'Calculate Risk';
+    }
+}
+
+async function handleCsvPrediction(e) {
+    e.preventDefault();
+    const form = e.target;
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const resultContainer = document.getElementById('csvPredictionResult');
+    
+    submitBtn.classList.add('loading');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Analyzing...';
+
+    try {
+        const formData = new FormData(form);
+        const csvFile = formData.get('csvFile');
+        
+        if (!csvFile) {
+            showMessage('Please select a CSV file.', 'error');
+            return;
+        }
+        
+        const response = await fetch(`/api/dashboard/machine/${currentPredictionMachineId}/predict-csv`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: formData
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            const summary = result.data.summary;
+            const analysisResults = result.data.analysisResults;
+            
+            // Update the CSV result display
+            document.getElementById('totalReadings').textContent = summary.totalReadings;
+            document.getElementById('anomalyCount').textContent = summary.anomalyCount;
+            document.getElementById('anomalyPercentage').textContent = `${summary.anomalyPercentage}%`;
+            document.getElementById('avgRiskScore').textContent = summary.avgRiskScore.toFixed(4);
+            document.getElementById('csvHealthScore').textContent = summary.healthScore;
+            document.getElementById('csvRulEstimate').textContent = `${summary.rulEstimate} days`;
+            document.getElementById('csvRiskStatus').textContent = summary.status;
+            
+            // Add status classes for styling
+            document.getElementById('csvHealthScore').className = `health-score ${summary.healthScore >= 80 ? 'excellent' : summary.healthScore >= 60 ? 'good' : summary.healthScore >= 40 ? 'warning' : 'critical'}`;
+            document.getElementById('csvRiskStatus').className = `risk-status ${summary.status}`;
+            
+            // Display anomaly details
+            const anomalyDetails = document.getElementById('anomalyDetails');
+            if (analysisResults && analysisResults.length > 0) {
+                const anomalies = analysisResults.filter(r => r.is_anomaly);
+                if (anomalies.length > 0) {
+                    anomalyDetails.innerHTML = `
+                        <h4>Anomaly Details (${anomalies.length} detected)</h4>
+                        <div class="anomaly-list">
+                            ${anomalies.slice(0, 10).map(anomaly => `
+                                <div class="anomaly-item">
+                                    <div>
+                                        <span class="timestamp">${anomaly.timestamp || `Row ${anomaly.row_index}`}</span>
+                                        <span class="row-index">(Row ${anomaly.row_index})</span>
+                                    </div>
+                                    <span class="error-score">Error: ${anomaly.reconstruction_error.toFixed(4)}</span>
+                                </div>
+                            `).join('')}
+                            ${anomalies.length > 10 ? `<div class="anomaly-item"><em>... and ${anomalies.length - 10} more anomalies</em></div>` : ''}
+                        </div>
+                    `;
+                } else {
+                    anomalyDetails.innerHTML = `
+                        <h4>Anomaly Details</h4>
+                        <div class="anomaly-list">
+                            <div class="anomaly-item">
+                                <span>No anomalies detected in this data window</span>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+            
+            resultContainer.style.display = 'block';
+            
+            // Update the machine in the allMachines array and refresh the display
+            const machineIndex = allMachines.findIndex(m => m._id === currentPredictionMachineId);
+            if (machineIndex !== -1) {
+                allMachines[machineIndex].healthScore = summary.healthScore;
+                allMachines[machineIndex].rulEstimate = summary.rulEstimate;
+                allMachines[machineIndex].status = summary.status;
+                allMachines[machineIndex].lastUpdated = new Date().toISOString();
+                
+                // Refresh the dashboard to show updated values
+                setTimeout(() => {
+                    loadDashboardData();
+                }, 1000);
+            }
+            
+            showMessage('CSV analysis completed successfully!', 'success');
+        } else {
+            showMessage(result.message || 'CSV analysis failed.', 'error');
+            resultContainer.style.display = 'none';
+        }
+
+    } catch (error) {
+        console.error('CSV prediction error:', error);
+        showMessage('An error occurred during CSV analysis.', 'error');
+    } finally {
+        submitBtn.classList.remove('loading');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Analyze CSV';
     }
 }
 

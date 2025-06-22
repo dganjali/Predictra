@@ -312,50 +312,147 @@
 
     <!-- Prediction Modal -->
     <div class="modal" id="predictionModal">
-        <div class="modal-content">
+        <div class="modal-content large">
             <div class="modal-header">
                 <h2 id="predictionModalTitle">Calculate Risk Score</h2>
                 <button class="modal-close" id="closePredictionModal">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
-            <form id="predictionForm" class="modal-form">
-                <div id="predictionFormBody">
-                    <!-- Sensor inputs will be dynamically generated here -->
-                </div>
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" id="cancelPrediction">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Calculate</button>
-                </div>
-            </form>
-            <div id="predictionResult" style="display:none;" class="prediction-result">
-                <h3>Risk Assessment Result</h3>
-                <div class="result-grid">
-                    <div class="result-item">
-                        <label>Risk Score:</label>
-                        <span id="riskScore" class="risk-score"></span>
-                    </div>
-                    <div class="result-item">
-                        <label>Anomaly Detected:</label>
-                        <span id="isAnomaly" class="anomaly-status"></span>
-                    </div>
-                    <div class="result-item">
-                        <label>Health Score:</label>
-                        <span id="healthScore" class="health-score"></span>
-                    </div>
-                    <div class="result-item">
-                        <label>RUL Estimate:</label>
-                        <span id="rulEstimate" class="rul-estimate"></span>
-                    </div>
-                    <div class="result-item">
-                        <label>Machine Status:</label>
-                        <span id="riskStatus" class="risk-status"></span>
+            <div class="modal-body">
+                <!-- Prediction Mode Selection -->
+                <div class="prediction-mode-selector">
+                    <h3>Select Prediction Mode</h3>
+                    <div class="mode-options">
+                        <label class="mode-option">
+                            <input type="radio" name="predictionMode" value="single" checked>
+                            <div class="mode-content">
+                                <i class="fas fa-chart-line"></i>
+                                <div>
+                                    <h4>Single Reading</h4>
+                                    <p>Enter current sensor values for instant risk assessment</p>
+                                </div>
+                            </div>
+                        </label>
+                        <label class="mode-option">
+                            <input type="radio" name="predictionMode" value="csv">
+                            <div class="mode-content">
+                                <i class="fas fa-file-csv"></i>
+                                <div>
+                                    <h4>CSV Analysis</h4>
+                                    <p>Upload a CSV file to analyze a window of sensor data</p>
+                                </div>
+                            </div>
+                        </label>
                     </div>
                 </div>
-                <p id="anomalyThreshold" class="threshold-info"></p>
-                <div class="result-note">
-                    <i class="fas fa-info-circle"></i>
-                    <span>The machine's health score, RUL estimate, and status have been updated based on this risk assessment.</span>
+
+                <!-- Single Reading Form -->
+                <form id="predictionForm" class="prediction-form" style="display: block;">
+                    <div class="form-section">
+                        <h3>Current Sensor Readings</h3>
+                        <div id="predictionFormBody">
+                            <!-- Sensor inputs will be dynamically generated here -->
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" id="cancelPrediction">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Calculate Risk</button>
+                    </div>
+                </form>
+
+                <!-- CSV Upload Form -->
+                <form id="csvPredictionForm" class="prediction-form" style="display: none;">
+                    <div class="form-section">
+                        <h3>Upload Sensor Data CSV</h3>
+                        <p class="form-description">Upload a CSV file containing sensor readings over time for comprehensive risk analysis.</p>
+                        <div class="form-group">
+                            <label for="csvFilePredict">Sensor Data CSV*</label>
+                            <input type="file" id="csvFilePredict" name="csvFile" class="form-control" accept=".csv" required>
+                            <small class="form-text">The CSV should contain the same sensor columns used during training.</small>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" id="cancelCsvPrediction">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Analyze CSV</button>
+                    </div>
+                </form>
+
+                <!-- Single Reading Results -->
+                <div id="predictionResult" style="display:none;" class="prediction-result">
+                    <h3>Risk Assessment Result</h3>
+                    <div class="result-grid">
+                        <div class="result-item">
+                            <label>Risk Score:</label>
+                            <span id="riskScore" class="risk-score"></span>
+                        </div>
+                        <div class="result-item">
+                            <label>Anomaly Detected:</label>
+                            <span id="isAnomaly" class="anomaly-status"></span>
+                        </div>
+                        <div class="result-item">
+                            <label>Health Score:</label>
+                            <span id="healthScore" class="health-score"></span>
+                        </div>
+                        <div class="result-item">
+                            <label>RUL Estimate:</label>
+                            <span id="rulEstimate" class="rul-estimate"></span>
+                        </div>
+                        <div class="result-item">
+                            <label>Machine Status:</label>
+                            <span id="riskStatus" class="risk-status"></span>
+                        </div>
+                    </div>
+                    <p id="anomalyThreshold" class="threshold-info"></p>
+                    <div class="result-note">
+                        <i class="fas fa-info-circle"></i>
+                        <span>The machine's health score, RUL estimate, and status have been updated based on this risk assessment.</span>
+                    </div>
+                </div>
+
+                <!-- CSV Analysis Results -->
+                <div id="csvPredictionResult" style="display:none;" class="prediction-result">
+                    <h3>CSV Analysis Results</h3>
+                    <div class="result-grid">
+                        <div class="result-item">
+                            <label>Total Readings:</label>
+                            <span id="totalReadings" class="total-readings"></span>
+                        </div>
+                        <div class="result-item">
+                            <label>Anomalies Detected:</label>
+                            <span id="anomalyCount" class="anomaly-count"></span>
+                        </div>
+                        <div class="result-item">
+                            <label>Anomaly Percentage:</label>
+                            <span id="anomalyPercentage" class="anomaly-percentage"></span>
+                        </div>
+                        <div class="result-item">
+                            <label>Average Risk Score:</label>
+                            <span id="avgRiskScore" class="avg-risk-score"></span>
+                        </div>
+                        <div class="result-item">
+                            <label>Health Score:</label>
+                            <span id="csvHealthScore" class="health-score"></span>
+                        </div>
+                        <div class="result-item">
+                            <label>RUL Estimate:</label>
+                            <span id="csvRulEstimate" class="rul-estimate"></span>
+                        </div>
+                        <div class="result-item">
+                            <label>Overall Status:</label>
+                            <span id="csvRiskStatus" class="risk-status"></span>
+                        </div>
+                    </div>
+                    <div class="anomaly-details">
+                        <h4>Anomaly Details</h4>
+                        <div id="anomalyDetails" class="anomaly-list">
+                            <!-- Anomaly details will be populated here -->
+                        </div>
+                    </div>
+                    <div class="result-note">
+                        <i class="fas fa-info-circle"></i>
+                        <span>The machine's health score, RUL estimate, and status have been updated based on this comprehensive analysis.</span>
+                    </div>
                 </div>
             </div>
         </div>
