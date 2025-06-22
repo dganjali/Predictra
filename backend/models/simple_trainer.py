@@ -9,8 +9,9 @@ import sys
 import json
 import numpy as np
 import pandas as pd
+import gc  # For garbage collection
 
-# Configure TensorFlow to suppress warnings and GPU messages
+# Configure TensorFlow to suppress warnings and limit memory usage
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 0=all, 1=no INFO, 2=no INFO/WARN, 3=no INFO/WARN/ERROR
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1'  # Disable GPU to avoid CUDA warnings
 
@@ -21,6 +22,7 @@ from sklearn.preprocessing import StandardScaler
 import joblib
 from typing import List, Dict, Tuple
 import logging
+import datetime
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -28,6 +30,15 @@ logger = logging.getLogger(__name__)
 
 # Suppress TensorFlow logging
 tf.get_logger().setLevel('ERROR')
+
+# Configure TensorFlow to limit memory growth
+gpus = tf.config.experimental.list_physical_devices('GPU')
+if gpus:
+    try:
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, True)
+    except RuntimeError as e:
+        print(f"GPU memory growth setting failed: {e}")
 
 class UltraSimpleTrainer:
     """Ultra-simple trainer that just works."""
@@ -69,27 +80,45 @@ class UltraSimpleTrainer:
         print(json.dumps(message_data), flush=True)
         logger.info(f"[{message_type.upper()}] {message}")
     
+    def _send_heartbeat(self):
+        """Send a heartbeat to keep the connection alive."""
+        heartbeat_data = {
+            "type": "heartbeat",
+            "timestamp": datetime.datetime.now().isoformat()
+        }
+        print(json.dumps(heartbeat_data), flush=True)
+    
+    def _cleanup_memory(self):
+        """Clean up memory to prevent memory leaks."""
+        gc.collect()
+        tf.keras.backend.clear_session()
+    
     def load_and_preprocess_data(self, csv_path: str, sensor_columns: List[str]) -> Tuple[np.ndarray, List[str]]:
-        """Load and preprocess CSV data."""
-        self._send_progress(10, "Loading training data...")
-        self._send_detailed_message("Reading CSV file...", "info")
+        """Load and preprocess CSV data with memory optimization."""
+        self._send_progress(5, "Initializing data processing...")
+        self._send_detailed_message("Starting data preprocessing pipeline...", "info")
         
         try:
-            # Read CSV file
-            df = pd.read_csv(csv_path)
-            self._send_detailed_message(f"Loaded CSV with {len(df)} rows and {len(df.columns)} columns", "info")
+            # Read CSV file in chunks to prevent memory issues
+            self._send_progress(10, "Loading training data...")
+            self._send_detailed_message("Reading CSV file...", "info")
             
-            # Find available sensor columns
-            available_columns = [col for col in sensor_columns if col in df.columns]
+            # Read only first few rows to get column info
+            df_sample = pd.read_csv(csv_path, nrows=100)
+            available_columns = [col for col in sensor_columns if col in df_sample.columns]
+            
             if not available_columns:
-                raise ValueError(f"No sensor columns found in CSV. Available: {list(df.columns)}")
+                raise ValueError(f"No sensor columns found in CSV. Available: {list(df_sample.columns)}")
             
             self._send_detailed_message(f"Using sensor columns: {', '.join(available_columns)}", "info")
             
-            # Select only the sensor columns
-            df_sensors = df[available_columns].copy()
+            # Read full dataset with only needed columns
+            self._send_progress(15, "Loading sensor data...")
+            df_sensors = pd.read_csv(csv_path, usecols=available_columns)
+            self._send_detailed_message(f"Loaded {len(df_sensors)} rows with {len(available_columns)} sensors", "info")
             
             # Handle missing values
+            self._send_progress(20, "Processing sensor data...")
             missing_before = df_sensors.isnull().sum().sum()
             df_sensors = df_sensors.fillna(method='ffill').fillna(method='bfill')
             missing_after = df_sensors.isnull().sum().sum()
@@ -100,16 +129,22 @@ class UltraSimpleTrainer:
             if df_sensors.empty:
                 raise ValueError("No data remaining after handling missing values")
             
-            # Limit data size for faster training
+            # Limit data size for faster training and memory efficiency
             original_size = len(df_sensors)
-            if len(df_sensors) > 2000:
-                df_sensors = df_sensors.sample(n=2000, random_state=42)
+            max_samples = 1500  # Reduced from 2000 to save memory
+            if len(df_sensors) > max_samples:
+                df_sensors = df_sensors.sample(n=max_samples, random_state=42)
                 self._send_detailed_message(f"Sampled {len(df_sensors)} rows from {original_size} for faster training", "info")
             
             # Scale the data
+            self._send_progress(25, "Scaling data...")
             self._send_detailed_message("Scaling data using StandardScaler...", "info")
             self.scaler = StandardScaler()
             scaled_data = self.scaler.fit_transform(df_sensors)
+            
+            # Clean up pandas dataframe to free memory
+            del df_sensors
+            gc.collect()
             
             self._send_progress(30, f"Preprocessed {len(scaled_data)} samples")
             self._send_detailed_message(f"Data preprocessing completed successfully", "success")
@@ -121,17 +156,18 @@ class UltraSimpleTrainer:
             raise
     
     def build_simple_model(self, input_shape: int) -> Sequential:
-        """Build a very simple neural network."""
-        self._send_progress(50, "Building simple neural network...")
+        """Build a very simple neural network with memory optimization."""
+        self._send_progress(35, "Building neural network...")
         self._send_detailed_message("Creating autoencoder architecture...", "info")
         
+        # Use smaller model to reduce memory usage
         model = Sequential([
-            Dense(64, activation='relu', input_shape=(input_shape,)),
-            Dropout(0.2),
-            Dense(32, activation='relu'),
-            Dropout(0.2),
-            Dense(16, activation='relu'),
-            Dense(input_shape, activation='linear')  # Output same as input for reconstruction
+            Dense(32, activation='relu', input_shape=(input_shape,)),  # Reduced from 64
+            Dropout(0.1),  # Reduced dropout
+            Dense(16, activation='relu'),  # Reduced from 32
+            Dropout(0.1),
+            Dense(8, activation='relu'),   # Reduced from 16
+            Dense(input_shape, activation='linear')
         ])
         
         model.compile(
@@ -141,38 +177,63 @@ class UltraSimpleTrainer:
         )
         
         param_count = model.count_params()
+        self._send_progress(40, f"Built model with {param_count:,} parameters")
         self._send_detailed_message(f"Built autoencoder with {param_count:,} parameters", "success")
         logger.info(f"Built simple model with {param_count} parameters")
         return model
     
     def train_model(self, X_train: np.ndarray) -> Dict:
-        """Train the model and return training metrics."""
-        self._send_progress(60, "Training neural network...")
-        self._send_detailed_message("Starting model training...", "info")
+        """Train the model with memory optimization and better progress tracking."""
+        self._send_progress(45, "Starting model training...")
+        self._send_detailed_message("Initializing training process...", "info")
         
         # Build model
         self.model = self.build_simple_model(X_train.shape[1])
         
         # Train model with very simple settings
         epochs = 3
-        self._send_detailed_message(f"Training for {epochs} epochs with batch size 32", "info")
+        batch_size = 16  # Reduced batch size to save memory
+        self._send_detailed_message(f"Training for {epochs} epochs with batch size {batch_size}", "info")
         
-        history = self.model.fit(
-            X_train, X_train,  # Autoencoder: input = target
-            epochs=epochs,
-            batch_size=32,
-            validation_split=0.2,
-            verbose=0
-        )
+        # Custom training loop for better progress tracking
+        history = {'loss': [], 'val_loss': []}
+        
+        for epoch in range(epochs):
+            self._send_progress(50 + (epoch * 15), f"Training epoch {epoch + 1}/{epochs}")
+            self._send_detailed_message(f"Starting epoch {epoch + 1}/{epochs}...", "info")
+            
+            # Train for one epoch
+            epoch_history = self.model.fit(
+                X_train, X_train,
+                epochs=1,
+                batch_size=batch_size,
+                validation_split=0.2,
+                verbose=0
+            )
+            
+            # Record metrics
+            history['loss'].extend(epoch_history.history['loss'])
+            history['val_loss'].extend(epoch_history.history.get('val_loss', epoch_history.history['loss']))
+            
+            # Send epoch completion message
+            current_loss = history['loss'][-1]
+            val_loss = history['val_loss'][-1]
+            self._send_detailed_message(f"Epoch {epoch + 1}/{epochs} completed - Loss: {current_loss:.6f}, Val Loss: {val_loss:.6f}", "success")
+            
+            # Send heartbeat to keep connection alive
+            self._send_heartbeat()
+            
+            # Clean up memory after each epoch
+            self._cleanup_memory()
         
         # Calculate training metrics
-        train_loss = history.history['loss'][-1]
-        val_loss = history.history['val_loss'][-1] if 'val_loss' in history.history else train_loss
+        train_loss = history['loss'][-1]
+        val_loss = history['val_loss'][-1]
         
         metrics = {
             'final_loss': train_loss,
             'final_val_loss': val_loss,
-            'epochs_trained': len(history.history['loss']),
+            'epochs_trained': len(history['loss']),
             'training_samples': len(X_train)
         }
         
@@ -180,14 +241,26 @@ class UltraSimpleTrainer:
         self._send_detailed_message(f"Training completed! Final loss: {train_loss:.6f}, Validation loss: {val_loss:.6f}", "success")
         return metrics
     
-    def calculate_threshold(self, X_train: np.ndarray) -> float:
+    def calculate_threshold(self, X_train: np.ndarray) -> Dict:
         """Calculate anomaly threshold based on reconstruction error."""
         self._send_progress(85, "Calculating anomaly threshold...")
         self._send_detailed_message("Computing reconstruction errors...", "info")
         
-        # Get reconstruction errors
-        predictions = self.model.predict(X_train, verbose=0)
-        mse_errors = np.mean((X_train - predictions) ** 2, axis=1)
+        # Get reconstruction errors in batches to save memory
+        batch_size = 100
+        mse_errors = []
+        
+        for i in range(0, len(X_train), batch_size):
+            batch = X_train[i:i+batch_size]
+            predictions = self.model.predict(batch, verbose=0)
+            batch_errors = np.mean((batch - predictions) ** 2, axis=1)
+            mse_errors.extend(batch_errors)
+            
+            # Send heartbeat during long computation
+            if i % 500 == 0:
+                self._send_heartbeat()
+        
+        mse_errors = np.array(mse_errors)
         
         # Calculate threshold as 95th percentile of errors
         threshold = np.percentile(mse_errors, 95)
@@ -214,34 +287,39 @@ class UltraSimpleTrainer:
         self._send_progress(90, "Saving model and metadata...")
         self._send_detailed_message("Saving trained model...", "info")
         
-        # Save model
-        model_path = os.path.join(self.model_dir, 'model.h5')
-        self.model.save(model_path)
-        self._send_detailed_message("Model saved successfully", "success")
-        
-        # Save scaler
-        scaler_path = os.path.join(self.model_dir, 'scaler.pkl')
-        joblib.dump(self.scaler, scaler_path)
-        self._send_detailed_message("Data scaler saved", "success")
-        
-        # Save column information
-        columns_path = os.path.join(self.model_dir, 'columns.json')
-        with open(columns_path, 'w') as f:
-            json.dump(sensor_columns, f)
-        self._send_detailed_message("Column configuration saved", "success")
-        
-        # Save training statistics
-        stats_path = os.path.join(self.model_dir, 'training_stats.json')
-        with open(stats_path, 'w') as f:
-            json.dump(training_stats, f)
-        self._send_detailed_message("Training statistics saved", "success")
-        
-        logger.info(f"Model saved to {self.model_dir}")
-        self._send_progress(100, "Training completed successfully!")
-        self._send_detailed_message("All files saved successfully!", "success")
+        try:
+            # Save model
+            model_path = os.path.join(self.model_dir, 'model.h5')
+            self.model.save(model_path)
+            self._send_detailed_message("Model saved successfully", "success")
+            
+            # Save scaler
+            scaler_path = os.path.join(self.model_dir, 'scaler.pkl')
+            joblib.dump(self.scaler, scaler_path)
+            self._send_detailed_message("Data scaler saved", "success")
+            
+            # Save column information
+            columns_path = os.path.join(self.model_dir, 'columns.json')
+            with open(columns_path, 'w') as f:
+                json.dump(sensor_columns, f)
+            self._send_detailed_message("Column configuration saved", "success")
+            
+            # Save training statistics
+            stats_path = os.path.join(self.model_dir, 'training_stats.json')
+            with open(stats_path, 'w') as f:
+                json.dump(training_stats, f)
+            self._send_detailed_message("Training statistics saved", "success")
+            
+            logger.info(f"Model saved to {self.model_dir}")
+            self._send_progress(100, "Training completed successfully!")
+            self._send_detailed_message("All files saved successfully!", "success")
+            
+        except Exception as e:
+            self._send_detailed_message(f"Error saving model: {str(e)}", "error")
+            raise
     
     def train(self, csv_path: str, sensor_columns: List[str]) -> Dict:
-        """Complete training pipeline."""
+        """Complete training pipeline with memory optimization."""
         try:
             # Load and preprocess data
             scaled_data, available_columns = self.load_and_preprocess_data(csv_path, sensor_columns)
@@ -262,6 +340,9 @@ class UltraSimpleTrainer:
             
             # Save everything
             self.save_model(available_columns, final_stats)
+            
+            # Final cleanup
+            self._cleanup_memory()
             
             return final_stats
             

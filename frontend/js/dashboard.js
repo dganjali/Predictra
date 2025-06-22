@@ -647,6 +647,12 @@ function startTrainPolling(machineId) {
                 addOutputLine(`[${timestamp}]`, data.detailedMessage.message, data.detailedMessage.type);
             }
 
+            // Handle heartbeat messages
+            if (data.heartbeat) {
+                // Just keep the connection alive, no need to display anything
+                console.log('Heartbeat received from training process');
+            }
+
             // Display detailed messages if available (for batch updates)
             if (data.detailedMessages && data.detailedMessages.length > 0) {
                 data.detailedMessages.forEach(msg => {

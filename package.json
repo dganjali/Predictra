@@ -4,8 +4,8 @@
   "description": "Machine-Specific RUL Estimation Dashboard",
   "main": "backend/server.js",
   "scripts": {
-    "start": "node backend/server.js",
-    "dev": "nodemon backend/server.js",
+    "start": "node --expose-gc backend/server.js",
+    "dev": "nodemon --expose-gc backend/server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [

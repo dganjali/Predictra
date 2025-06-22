@@ -358,20 +358,56 @@ router.get('/machine/:machineId/status', auth, async (req, res) => {
             message: 'Starting training...'
         })}\n\n`);
 
+        // Set up fallback progress updates
+        let lastProgress = 0;
+        const fallbackInterval = setInterval(() => {
+            if (lastProgress < 90) {  // Don't go above 90% with fallback
+                lastProgress += 1;
+                res.write(`data: ${JSON.stringify({
+                    success: true,
+                    status: 'running',
+                    progress: lastProgress,
+                    message: 'Training in progress...'
+                })}\n\n`);
+            }
+        }, 30000); // Send update every 30 seconds as fallback
+
+        // Set up timeout to prevent infinite hanging
+        const trainingTimeout = setTimeout(() => {
+            console.error(`Training timeout for machine ${machineId} after 10 minutes`);
+            clearInterval(fallbackInterval);
+            
+            // Kill the Python process if it's still running
+            if (pythonProcess && !pythonProcess.killed) {
+                pythonProcess.kill('SIGTERM');
+            }
+            
+            res.write(`data: ${JSON.stringify({
+                success: false,
+                status: 'failed',
+                message: 'Training timed out after 10 minutes. Please try again with a smaller dataset.'
+            })}\n\n`);
+            res.end();
+        }, 600000); // 10 minute timeout
+
         // Run Python training script
         const pythonScript = path.join(__dirname, '../models/simple_trainer.py');
         const pythonProcess = spawn('python3', [pythonScript, req.user._id, machineId, machine.training_data_path], {
             env: {
                 ...process.env,
                 SENSOR_COLUMNS: JSON.stringify(machine.training_columns || [])
-            }
+            },
+            // Set timeout for the process
+            timeout: 600000 // 10 minutes
         });
 
         let output = '';
+        let lastActivity = Date.now();
 
         pythonProcess.stdout.on('data', (data) => {
             const chunk = data.toString();
             output += chunk;
+            lastActivity = Date.now(); // Update activity timestamp
             
             // Parse each line for real-time updates
             const lines = chunk.split('\n');
@@ -383,6 +419,9 @@ router.get('/machine/:machineId/status', auth, async (req, res) => {
                     const parsed = JSON.parse(trimmedLine);
                     
                     if (parsed.type === 'progress') {
+                        // Update last progress to prevent fallback from overriding real progress
+                        lastProgress = parsed.progress;
+                        
                         // Send progress update
                         res.write(`data: ${JSON.stringify({
                             success: true,
@@ -390,6 +429,10 @@ router.get('/machine/:machineId/status', auth, async (req, res) => {
                             progress: parsed.progress,
                             message: parsed.message
                         })}\n\n`);
+                        
+                        // Also update the machine in database
+                        updateProgress(machineId, parsed.progress, parsed.message);
+                        
                     } else if (parsed.type === 'message') {
                         // Send detailed message
                         res.write(`data: ${JSON.stringify({
@@ -401,6 +444,14 @@ router.get('/machine/:machineId/status', auth, async (req, res) => {
                                 type: parsed.message_type || 'info'
                             }
                         })}\n\n`);
+                        
+                    } else if (parsed.type === 'heartbeat') {
+                        // Send heartbeat to keep connection alive
+                        res.write(`data: ${JSON.stringify({
+                            success: true,
+                            status: 'running',
+                            heartbeat: true
+                        })}\n\n`);
                     }
                 } catch (e) {
                     // Not JSON, ignore - this is normal for log messages
@@ -410,9 +461,63 @@ router.get('/machine/:machineId/status', auth, async (req, res) => {
 
         pythonProcess.stderr.on('data', (data) => {
             console.error(`[Python stderr for ${machineId}]: ${data.toString()}`);
+            lastActivity = Date.now(); // Update activity timestamp
         });
 
-        pythonProcess.on('close', (code) => {
+        // Set up activity monitoring to detect if process is stuck
+        const activityMonitor = setInterval(() => {
+            const timeSinceLastActivity = Date.now() - lastActivity;
+            if (timeSinceLastActivity > 300000) { // 5 minutes without activity
+                console.error(`Training appears stuck for machine ${machineId} - no activity for 5 minutes`);
+                clearInterval(activityMonitor);
+                
+                // Kill the process and send error
+                if (pythonProcess && !pythonProcess.killed) {
+                    pythonProcess.kill('SIGTERM');
+                }
+                
+                res.write(`data: ${JSON.stringify({
+                    success: false,
+                    status: 'failed',
+                    message: 'Training appears to be stuck. Please try again with a smaller dataset.'
+                })}\n\n`);
+                res.end();
+            }
+        }, 60000); // Check every minute
+
+        // Set up memory monitoring
+        const memoryMonitor = setInterval(() => {
+            const memUsage = process.memoryUsage();
+            const memUsageMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+            
+            if (memUsageMB > 500) { // If using more than 500MB
+                console.warn(`High memory usage detected: ${memUsageMB}MB for machine ${machineId}`);
+                
+                // Force garbage collection if available
+                if (global.gc) {
+                    global.gc();
+                    console.log(`Garbage collection triggered for machine ${machineId}`);
+                }
+            }
+        }, 30000); // Check every 30 seconds
+
+        // Cleanup function
+        const cleanup = () => {
+            clearInterval(fallbackInterval);
+            clearTimeout(trainingTimeout);
+            clearInterval(activityMonitor);
+            clearInterval(memoryMonitor);
+            
+            // Force garbage collection
+            if (global.gc) {
+                global.gc();
+            }
+        };
+
+        // Update the close and error handlers to use cleanup
+        const originalCloseHandler = pythonProcess.on('close', (code) => {
+            cleanup();
+            
             console.log(`[Python process for ${machineId} exited with code ${code}`);
             
             if (code === 0) {
@@ -435,7 +540,9 @@ router.get('/machine/:machineId/status', auth, async (req, res) => {
             res.end();
         });
 
-        pythonProcess.on('error', (error) => {
+        const originalErrorHandler = pythonProcess.on('error', (error) => {
+            cleanup();
+            
             console.error(`[Python process error for ${machineId}]:`, error);
             res.write(`data: ${JSON.stringify({
                 success: false,
