@@ -1389,11 +1389,15 @@ function calculateHealthScoreWithMachineParams(riskScore, isAnomaly = false, mod
     return Math.round(Math.max(0, Math.min(MAX_HEALTH_SCORE, healthScore)));
 }
 
-// Helper function to determine machine status
-function determineMachineStatus(healthScore) {
-    if (healthScore >= 80) return 'healthy';
-    else if (healthScore < 30) return 'critical';
-    else return 'warning';
+// Helper function to determine machine status based on RUL
+function determineMachineStatus(rulEstimate) {
+    if (rulEstimate >= 150) {
+        return 'healthy';
+    } else if (rulEstimate >= 100) {
+        return 'warning';
+    } else {
+        return 'critical';
+    }
 }
 
 // Get machine training parameters
@@ -1820,7 +1824,7 @@ async function startPredictionWithStoredParams(machine, csvFilePath, customTimeo
                         // Use machine-specific parameters for calculations
                         const rulResult = calculateRULWithMachineParams(riskScore, isAnomaly, modelParams);
                         const healthScore = calculateHealthScoreWithMachineParams(riskScore, isAnomaly, modelParams);
-                        const machineStatus = determineMachineStatus(healthScore);
+                        const machineStatus = determineMachineStatus(rulResult.rulEstimate);
                         
                         const finalResult = {
                             prediction_duration: predictionDuration,
@@ -1832,6 +1836,8 @@ async function startPredictionWithStoredParams(machine, csvFilePath, customTimeo
                             risk_percentage: rulResult.riskPercentage,
                             prediction_confidence: predictionResult.confidence || 0.85,
                             processed_samples: predictionResult.processed_samples || 0,
+                            anomaly_count: predictionResult.anomaly_count || 0,
+                            anomaly_percentage: predictionResult.anomaly_percentage || 0,
                             model_threshold_used: threshold,
                             machine_params_used: {
                                 threshold: modelParams.threshold,

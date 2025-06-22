@@ -1317,6 +1317,17 @@ async function handleCsvPrediction(e) {
     const submitBtn = form.querySelector('button[type="submit"]');
     const resultContainer = document.getElementById('csvPredictionResult');
     
+    // Clear previous results to prevent flashing old data
+    document.getElementById('totalReadings').textContent = '';
+    document.getElementById('anomalyCount').textContent = '';
+    document.getElementById('anomalyPercentage').textContent = '';
+    document.getElementById('avgRiskScore').textContent = '';
+    document.getElementById('csvHealthScore').textContent = '';
+    document.getElementById('csvRulEstimate').textContent = '';
+    document.getElementById('csvRiskStatus').textContent = '';
+    document.getElementById('anomalyDetails').innerHTML = '';
+    resultContainer.style.display = 'none';
+
     submitBtn.classList.add('loading');
     submitBtn.disabled = true;
     submitBtn.textContent = 'Analyzing...';
@@ -1345,8 +1356,8 @@ async function handleCsvPrediction(e) {
             
             // Update the CSV result display
             document.getElementById('totalReadings').textContent = results.processed_samples;
-            document.getElementById('anomalyCount').textContent = results.is_anomaly ? '1' : '0';
-            document.getElementById('anomalyPercentage').textContent = results.is_anomaly ? '100%' : '0%';
+            document.getElementById('anomalyCount').textContent = results.anomaly_count;
+            document.getElementById('anomalyPercentage').textContent = `${results.anomaly_percentage.toFixed(1)}%`;
             document.getElementById('avgRiskScore').textContent = results.anomaly_score.toFixed(4);
             document.getElementById('csvHealthScore').textContent = results.health_score;
             document.getElementById('csvRulEstimate').textContent = `${results.rul_estimate} days`;
