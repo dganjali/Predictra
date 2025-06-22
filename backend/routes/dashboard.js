@@ -1594,7 +1594,7 @@ router.put('/machine/:id/update-params', async (req, res) => {
 });
 
 // Calculate risk and RUL for a trained machine
-router.post('/machine/:id/calculate-risk-rul', upload.single('csvFile'), async (req, res) => {
+router.post('/machine/:id/calculate-risk-rul', auth, upload.single('csvFile'), async (req, res) => {
     try {
         const { id } = req.params;
 
