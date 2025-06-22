@@ -193,17 +193,69 @@ router.post('/machines', auth, async (req, res) => {
         const { machineName, machineType, manufacturer } = req.body;
         const user = req.user;
 
+        // Set up default sensors that match the pre-trained model
+        const pretrainedConfigPath = path.join(__dirname, '../models/pretrained_config.json');
+        let defaultSensors = [];
+        let modelParams = null;
+        let trainingStatus = 'none';
+        let modelStatus = 'untrained';
+
+        if (fs.existsSync(pretrainedConfigPath)) {
+            try {
+                const pretrainedConfig = JSON.parse(fs.readFileSync(pretrainedConfigPath, 'utf8'));
+                const pretrained = pretrainedConfig.pretrained_model;
+                
+                // Create sensors that match the expected columns
+                defaultSensors = pretrained.trained_columns.map((columnName, index) => ({
+                    sensorId: columnName,
+                    name: columnName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+                    type: 'numeric',
+                    unit: index % 4 === 0 ? '°C' : index % 4 === 1 ? 'Hz' : index % 4 === 2 ? 'A' : 'bar',
+                    minValue: 0,
+                    maxValue: 100
+                }));
+
+                // Set up model parameters for instant use
+                modelParams = {
+                    threshold: pretrained.threshold,
+                    mae_threshold: pretrained.mae_threshold,
+                    mean_loss: pretrained.mean_loss,
+                    max_loss: pretrained.max_loss,
+                    min_loss: pretrained.min_loss,
+                    std_loss: pretrained.std_loss,
+                    percentile_90: pretrained.percentile_90,
+                    percentile_95: pretrained.percentile_95,
+                    percentile_99: pretrained.percentile_99,
+                    mae_stats: pretrained.mae_stats,
+                    model_info: pretrained.model_info,
+                    source: 'pre_trained_model',
+                    trained_columns: pretrained.trained_columns
+                };
+                
+                trainingStatus = 'completed';
+                modelStatus = 'trained';
+                
+                console.log(`✅ Auto-configured machine with ${defaultSensors.length} sensors from pre-trained model`);
+            } catch (error) {
+                console.error('Error loading pre-trained config:', error);
+            }
+        }
+
         const newMachine = new Machine({
             ...req.body,
             userId: user._id,
-            training_status: 'none'
+            training_status: trainingStatus,
+            modelStatus: modelStatus,
+            sensors: defaultSensors,
+            model_params: modelParams,
+            lastTrained: modelParams ? new Date() : undefined
         });
 
         await newMachine.save();
 
         res.status(201).json({
             success: true,
-            message: 'Machine added successfully.',
+            message: 'Machine added successfully with pre-configured sensors.',
             machine: newMachine
         });
 
@@ -226,28 +278,39 @@ router.post('/machine/:machineId/train', auth, upload.single('csvFile'), async (
         const { sensors, columns } = req.body;
         const user = req.user;
 
-        // Remove the requirement for CSV file since we're using pre-trained parameters
-        // if (!req.file) {
-        //     return res.status(400).json({ success: false, message: 'Training data file is required.' });
-        // }
+        console.log('🚀 Training request received for machine:', machineId);
+        console.log('📁 File uploaded:', req.file ? req.file.filename : 'No file');
+        console.log('⚙️ Sensors:', sensors);
+        console.log('📊 Columns:', columns);
+
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: 'Training data file is required.' });
+        }
         
         const machine = await Machine.findOne({ _id: machineId, userId: user._id });
         if (!machine) {
             return res.status(404).json({ success: false, message: 'Machine not found.' });
         }
 
+        // Parse the sensor configuration
+        const parsedSensors = JSON.parse(sensors || '[]');
+        const parsedColumns = JSON.parse(columns || '[]');
+
+        console.log('✅ Parsed sensors:', parsedSensors);
+        console.log('✅ Parsed columns:', parsedColumns);
+
         // Update machine with new training info
-        machine.sensors = JSON.parse(sensors || '[]');
-        machine.training_columns = JSON.parse(columns || '[]');
-        if (req.file) {
-            machine.training_data_path = req.file.path;
-        }
-        machine.training_status = 'pending'; // Set to pending to kick off polling
+        machine.sensors = parsedSensors;
+        machine.training_columns = parsedColumns;
+        machine.training_data_path = req.file.path;
+        machine.training_status = 'pending';
+        machine.training_progress = 0;
+        machine.training_message = 'Preparing to start training...';
         
         await machine.save();
 
         // Start training process in the background
-        trainModel(machine, user);
+        trainModelWithCSV(machine, user, req.file.path);
 
         res.status(200).json({
             success: true,
@@ -419,14 +482,36 @@ router.post('/machine/:id/predict', auth, async (req, res) => {
         const { id } = req.params;
         const { sensorData } = req.body;
 
+        console.log(`🔍 Prediction request for machine ${id}`);
+        console.log(`📊 Sensor data received:`, sensorData);
+
         const machine = await Machine.findById(id);
         if (!machine) {
+            console.log(`❌ Machine ${id} not found`);
             return res.status(404).json({ success: false, message: 'Machine not found' });
         }
+        
+        console.log(`✅ Machine found: ${machine.machineName}`);
+        console.log(`👤 Machine userId: ${machine.userId}, Request userId: ${req.user._id}`);
+        console.log(`🎯 Machine modelStatus: ${machine.modelStatus}`);
+        console.log(`🧠 Machine training_status: ${machine.training_status}`);
+        console.log(`⚙️  Machine sensors:`, machine.sensors);
+        console.log(`📋 Machine model_params:`, machine.model_params);
+        
         if (machine.userId.toString() !== req.user._id.toString()) {
+            console.log(`❌ User not authorized for machine ${id}`);
             return res.status(403).json({ success: false, message: 'User not authorized' });
         }
-        if (machine.modelStatus !== 'trained') {
+        
+        // Check multiple training status indicators
+        const isTrained = machine.modelStatus === 'trained' || 
+                         machine.training_status === 'completed' ||
+                         (machine.model_params && machine.model_params.source === 'pre_trained_model');
+        
+        console.log(`🔄 Is machine trained? ${isTrained}`);
+        
+        if (!isTrained) {
+            console.log(`❌ Model for machine ${id} is not trained yet`);
             return res.status(400).json({ success: false, message: 'Model for this machine is not trained yet.' });
         }
 
@@ -434,6 +519,7 @@ router.post('/machine/:id/predict', auth, async (req, res) => {
         // Use pre-trained model files instead of machine-specific files
         const pretrainedConfigPath = path.join(__dirname, '../models/pretrained_config.json');
         if (!fs.existsSync(pretrainedConfigPath)) {
+            console.log(`❌ Pre-trained config not found at: ${pretrainedConfigPath}`);
             return res.status(500).json({ success: false, message: 'Pre-trained model configuration not found.' });
         }
         
@@ -441,21 +527,36 @@ router.post('/machine/:id/predict', auth, async (req, res) => {
         const pretrained = pretrainedConfig.pretrained_model;
         const expectedColumns = pretrained.trained_columns;
         
+        console.log(`📂 Expected columns from pre-trained model:`, expectedColumns);
+        
         // Map sensor data to the expected column names
         // The sensorData keys are the sensorIds from the frontend form
         const mappedSensorData = {};
         for (const sensor of machine.sensors) {
+            console.log(`🔍 Checking sensor: ${sensor.sensorId} (${sensor.name})`);
             if (sensorData.hasOwnProperty(sensor.sensorId)) {
                 // Use the sensor's sensorId (which is the column name from CSV) as the key
                 mappedSensorData[sensor.sensorId] = sensorData[sensor.sensorId];
+                console.log(`✅ Mapped ${sensor.sensorId} = ${sensorData[sensor.sensorId]}`);
+            } else {
+                console.log(`❌ Missing sensor data for: ${sensor.sensorId}`);
             }
         }
         
+        console.log(`🗺️  Mapped sensor data:`, mappedSensorData);
+        
         // Order the data according to the pre-trained model's expected column order
-        const orderedSensorData = expectedColumns.map(column => mappedSensorData[column]);
+        const orderedSensorData = expectedColumns.map(column => {
+            const value = mappedSensorData[column];
+            console.log(`📊 Column ${column}: ${value}`);
+            return value;
+        });
+
+        console.log(`📋 Ordered sensor data:`, orderedSensorData);
 
         if (orderedSensorData.some(v => v === undefined)) {
             const missing = expectedColumns.filter(col => !mappedSensorData.hasOwnProperty(col));
+            console.log(`❌ Missing required sensor data:`, missing);
             return res.status(400).json({
                 success: false,
                 message: `Missing required sensor data. Please provide values for: ${missing.join(', ')}`
@@ -751,6 +852,210 @@ function getModelPaths(userId, machineId) {
     };
 }
 
+async function trainModelWithCSV(machine, user, csvFilePath) {
+    const machineId = machine._id.toString();
+    const userId = user._id.toString();
+    
+    try {
+        console.log(`🏋️ Starting real training for machine ${machineId} using CSV: ${csvFilePath}`);
+        
+        // Update progress: Starting
+        await Machine.findByIdAndUpdate(machineId, {
+            training_status: 'in_progress',
+            training_progress: 5,
+            training_message: 'Initializing training environment...'
+        });
+        
+        // Validate CSV file exists
+        if (!fs.existsSync(csvFilePath)) {
+            throw new Error('Training CSV file not found');
+        }
+        
+        // Update progress: Reading data
+        await Machine.findByIdAndUpdate(machineId, {
+            training_progress: 15,
+            training_message: 'Reading and preprocessing training data...'
+        });
+        
+        // Create a smaller sample of the CSV for faster training
+        const Papa = require('papaparse');
+        const csvContent = fs.readFileSync(csvFilePath, 'utf8');
+        const parsedData = Papa.parse(csvContent, { header: true, skipEmptyLines: true });
+        
+        // Take only first 500 rows for faster training
+        const sampleSize = Math.min(500, parsedData.data.length);
+        const sampleData = parsedData.data.slice(0, sampleSize);
+        
+        console.log(`📊 Using ${sampleSize} rows from ${parsedData.data.length} total rows`);
+        
+        // Create sampled CSV file
+        const sampleCsvPath = csvFilePath.replace('.csv', '_sample.csv');
+        const sampleCsvContent = Papa.unparse({
+            fields: parsedData.meta.fields,
+            data: sampleData
+        });
+        fs.writeFileSync(sampleCsvPath, sampleCsvContent);
+        
+        // Update progress: Starting Python training
+        await Machine.findByIdAndUpdate(machineId, {
+            training_progress: 25,
+            training_message: 'Starting ML model training...'
+        });
+        
+        // Prepare training parameters
+        const pythonScriptPath = path.join(__dirname, '..', 'models', 'anomaly.py');
+        const selectedColumns = machine.training_columns || [];
+        
+        console.log(`🎯 Training with columns:`, selectedColumns);
+        
+        // Create temporary columns file
+        const tempDir = path.join(__dirname, '..', 'uploads', 'temp');
+        if (!fs.existsSync(tempDir)) {
+            fs.mkdirSync(tempDir, { recursive: true });
+        }
+        const columnsFilePath = path.join(tempDir, `columns_${machineId}_${Date.now()}.json`);
+        fs.writeFileSync(columnsFilePath, JSON.stringify(selectedColumns));
+        
+        // Start Python training process
+        const pythonProcess = spawn('python3', [
+            pythonScriptPath,
+            'train',
+            userId,
+            machineId,
+            sampleCsvPath,
+            columnsFilePath
+        ]);
+        
+        let rawOutput = '';
+        let lastProgress = 25;
+        
+        // Monitor Python process output for progress updates
+        pythonProcess.stdout.on('data', (data) => {
+            const output = data.toString();
+            rawOutput += output;
+            
+            // Parse progress from Python output
+            if (output.includes('Starting training')) {
+                lastProgress = 40;
+                updateProgress(machineId, lastProgress, 'Training neural network...');
+            } else if (output.includes('Epoch')) {
+                lastProgress = Math.min(80, lastProgress + 5);
+                const epochMatch = output.match(/Epoch (\d+)/);
+                const epoch = epochMatch ? epochMatch[1] : '?';
+                updateProgress(machineId, lastProgress, `Training epoch ${epoch}...`);
+            } else if (output.includes('Saving model')) {
+                lastProgress = 90;
+                updateProgress(machineId, lastProgress, 'Saving trained model...');
+            } else if (output.includes('Training completed')) {
+                lastProgress = 95;
+                updateProgress(machineId, lastProgress, 'Finalizing training...');
+            }
+        });
+        
+        pythonProcess.stderr.on('data', (data) => {
+            console.error(`[Training Error for ${machineId}]: ${data.toString()}`);
+        });
+        
+        pythonProcess.on('close', async (code) => {
+            // Clean up temporary files
+            [sampleCsvPath, columnsFilePath].forEach(filePath => {
+                if (fs.existsSync(filePath)) {
+                    fs.unlink(filePath, (err) => {
+                        if (err) console.error(`Error deleting temp file ${filePath}:`, err);
+                    });
+                }
+            });
+            
+            if (code !== 0) {
+                console.error(`❌ Training failed for machine ${machineId} with exit code ${code}`);
+                await Machine.findByIdAndUpdate(machineId, {
+                    training_status: 'failed',
+                    training_progress: 0,
+                    training_message: 'Training failed. Please check your data and try again.'
+                });
+                return;
+            }
+            
+            try {
+                // Parse training results
+                let trainingResult = null;
+                try {
+                    const lines = rawOutput.split('\n');
+                    const jsonLine = lines.find(line => line.trim().startsWith('{') && line.includes('success'));
+                    if (jsonLine) {
+                        trainingResult = JSON.parse(jsonLine.trim());
+                    }
+                } catch (parseError) {
+                    console.error('Error parsing training output:', parseError);
+                }
+                
+                if (trainingResult && trainingResult.success) {
+                    // Training successful - update machine with results
+                    const modelParams = {
+                        threshold: trainingResult.threshold,
+                        mae_threshold: trainingResult.mae_threshold || trainingResult.threshold,
+                        mean_loss: trainingResult.mean_loss,
+                        max_loss: trainingResult.max_loss,
+                        min_loss: trainingResult.min_loss,
+                        std_loss: trainingResult.std_loss,
+                        percentile_90: trainingResult.percentile_90,
+                        percentile_95: trainingResult.percentile_95,
+                        percentile_99: trainingResult.percentile_99,
+                        source: 'custom_trained_model',
+                        trained_columns: selectedColumns,
+                        training_samples: sampleSize,
+                        training_date: new Date().toISOString()
+                    };
+                    
+                    await Machine.findByIdAndUpdate(machineId, {
+                        training_status: 'completed',
+                        training_progress: 100,
+                        model_params: modelParams,
+                        modelStatus: 'trained',
+                        training_message: `Training completed successfully! Used ${sampleSize} samples.`,
+                        lastTrained: new Date()
+                    });
+                    
+                    console.log(`✅ Training completed successfully for machine ${machineId}`);
+                    console.log(`📊 Model threshold: ${trainingResult.threshold}`);
+                    console.log(`🎯 Training samples: ${sampleSize}`);
+                } else {
+                    throw new Error('Training completed but no valid results returned');
+                }
+                
+            } catch (error) {
+                console.error(`❌ Error processing training results for machine ${machineId}:`, error);
+                await Machine.findByIdAndUpdate(machineId, {
+                    training_status: 'failed',
+                    training_progress: 0,
+                    training_message: `Training failed: ${error.message}`
+                });
+            }
+        });
+        
+    } catch (error) {
+        console.error(`❌ Error starting training for machine ${machineId}:`, error);
+        await Machine.findByIdAndUpdate(machineId, {
+            training_status: 'failed',
+            training_progress: 0,
+            training_message: `Training setup failed: ${error.message}`
+        });
+    }
+}
+
+// Helper function to update training progress
+async function updateProgress(machineId, progress, message) {
+    try {
+        await Machine.findByIdAndUpdate(machineId, {
+            training_progress: progress,
+            training_message: message
+        });
+        console.log(`📈 Progress ${progress}%: ${message}`);
+    } catch (error) {
+        console.error('Error updating progress:', error);
+    }
+}
+
 async function trainModel(machine, user) {
     const machineId = machine._id.toString();
     const userId = user._id.toString();
@@ -807,4 +1112,75 @@ async function trainModel(machine, user) {
     }
 }
 
-module.exports = router; 
+// @route   POST /api/dashboard/machine/:id/setup-pretrained
+// @desc    Setup a machine to use the pre-trained model
+// @access  Private
+router.post('/machine/:id/setup-pretrained', auth, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const machine = await Machine.findOne({ _id: id, userId: req.user._id });
+        if (!machine) {
+            return res.status(404).json({ success: false, message: 'Machine not found' });
+        }
+
+        // Set up with pre-trained model
+        const pretrainedConfigPath = path.join(__dirname, '../models/pretrained_config.json');
+        if (!fs.existsSync(pretrainedConfigPath)) {
+            return res.status(500).json({ success: false, message: 'Pre-trained model configuration not found.' });
+        }
+        
+        const pretrainedConfig = JSON.parse(fs.readFileSync(pretrainedConfigPath, 'utf8'));
+        const pretrained = pretrainedConfig.pretrained_model;
+        
+        // Create sensors that match the expected columns
+        const defaultSensors = pretrained.trained_columns.map((columnName, index) => ({
+            sensorId: columnName,
+            name: columnName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+            type: 'numeric',
+            unit: index % 4 === 0 ? '°C' : index % 4 === 1 ? 'Hz' : index % 4 === 2 ? 'A' : 'bar',
+            minValue: 0,
+            maxValue: 100
+        }));
+
+        // Set up model parameters
+        const modelParams = {
+            threshold: pretrained.threshold,
+            mae_threshold: pretrained.mae_threshold,
+            mean_loss: pretrained.mean_loss,
+            max_loss: pretrained.max_loss,
+            min_loss: pretrained.min_loss,
+            std_loss: pretrained.std_loss,
+            percentile_90: pretrained.percentile_90,
+            percentile_95: pretrained.percentile_95,
+            percentile_99: pretrained.percentile_99,
+            mae_stats: pretrained.mae_stats,
+            model_info: pretrained.model_info,
+            source: 'pre_trained_model',
+            trained_columns: pretrained.trained_columns
+        };
+
+        // Update the machine
+        await Machine.findByIdAndUpdate(id, {
+            training_status: 'completed',
+            modelStatus: 'trained',
+            sensors: defaultSensors,
+            model_params: modelParams,
+            lastTrained: new Date(),
+            training_progress: 100,
+            training_message: 'Pre-trained model configured successfully!'
+        });
+
+        res.json({ 
+            success: true, 
+            message: 'Machine configured with pre-trained model successfully!',
+            sensorsConfigured: defaultSensors.length
+        });
+
+    } catch (error) {
+        console.error('Setup pre-trained model error:', error);
+        res.status(500).json({ success: false, message: 'Server error during setup' });
+    }
+});
+
+module.exports = router;

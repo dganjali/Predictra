@@ -475,6 +475,83 @@ function initTrainMachineModal() {
             container.appendChild(item);
         });
     }
+
+    // Handle form submission for actual training
+    submitBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        if (!validateStep(2) || !currentTrainMachineId) return;
+
+        console.log('📤 Starting training submission...');
+
+        // Move to progress step
+        currentStep = 3;
+        updateFormSteps();
+
+        // Collect form data
+        const formData = new FormData(form);
+        const featureColumns = [...modal.querySelectorAll('input[name="columns"]:checked')].map(cb => cb.value);
+        
+        console.log('📊 Selected feature columns:', featureColumns);
+        
+        if (featureColumns.length === 0) {
+            showMessage('Please select at least one sensor column.', 'error');
+            currentStep = 1; // Go back to column selection
+            updateFormSteps();
+            return;
+        }
+
+        // Build sensor configuration from form inputs
+        const sensors = featureColumns.map(column => {
+            const displayName = document.querySelector(`input[name="sensor_display_${column}"]`)?.value || column;
+            const unit = document.querySelector(`input[name="sensor_unit_${column}"]`)?.value || '';
+            
+            return {
+                sensorId: column,
+                name: displayName,
+                unit: unit,
+                type: 'numeric',
+                minValue: 0,
+                maxValue: 100
+            };
+        });
+        
+        console.log('⚙️ Sensor configuration:', sensors);
+        
+        // Prepare form data for submission
+        const requiredColumns = originalCsvHeaders.filter(h => idTsSynonyms.includes(h.toLowerCase()));
+        const allColumns = [...new Set([...featureColumns, ...requiredColumns])];
+        
+        // Clear old form data and add new data
+        const finalFormData = new FormData();
+        finalFormData.append('csvFile', formData.get('csvFile'));
+        finalFormData.append('columns', JSON.stringify(allColumns));
+        finalFormData.append('sensors', JSON.stringify(sensors));
+
+        try {
+            console.log('🚀 Submitting training request...');
+            const response = await fetch(`/api/dashboard/machine/${currentTrainMachineId}/train`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                body: finalFormData
+            });
+            const data = await response.json();
+            
+            console.log('📡 Training response:', data);
+            
+            if (!data.success) {
+                showMessage(`Error: ${data.message}`, 'error');
+                currentStep = 2; updateFormSteps();
+            } else {
+                // Start polling for progress updates
+                startTrainPolling(currentTrainMachineId);
+                showMessage('Training started successfully!', 'success');
+            }
+        } catch (error) {
+            console.error('❌ Training submission error:', error);
+            showMessage('Network error. Could not start training.', 'error');
+            currentStep = 2; updateFormSteps();
+        }
+    });
 }
 
 function startTrainPolling(machineId) {
@@ -732,9 +809,9 @@ function getTrainingStatusHTML(status) {
     if (!status || status === 'none') return '';
 
     const statusMap = {
-        'pending': { text: 'Pending Training', icon: 'fa-clock', color: '#17a2b8' },
-        'in_progress': { text: 'Checking Pre-trained Model...', icon: 'fa-sync fa-spin', color: '#ffc107' },
-        'completed': { text: 'Instant Training Complete', icon: 'fa-check-circle', color: '#28a745' },
+        'pending': { text: 'Preparing Training...', icon: 'fa-clock', color: '#17a2b8' },
+        'in_progress': { text: 'Training Neural Network...', icon: 'fa-sync fa-spin', color: '#ffc107' },
+        'completed': { text: 'Training Complete', icon: 'fa-check-circle', color: '#28a745' },
         'failed': { text: 'Training Failed', icon: 'fa-times-circle', color: '#dc3545' }
     };
 
