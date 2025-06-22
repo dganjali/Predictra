@@ -1,6 +1,7 @@
 # General
 Flask==2.0.1
 Werkzeug==2.0.2
+psutil==5.9.6
 
 # ML & Data Processing
 # Pinned for compatibility with Python 3.10 and each other.
