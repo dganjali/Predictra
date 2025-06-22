@@ -343,7 +343,7 @@ router.get('/machine/:machineId/status', auth, async (req, res) => {
     try {
         // Get the machine to check its training status
         const machine = await Machine.findOne({ _id: machineId, userId: req.user._id });
-        if (!machine) {
+            if (!machine) {
             return res.status(404).json({ success: false, message: 'Machine not found' });
         }
 
@@ -366,8 +366,8 @@ router.get('/machine/:machineId/status', auth, async (req, res) => {
         // If training is not in progress, end the connection
         if (machine.training_status !== 'in_progress' && machine.training_status !== 'pending') {
             res.end();
-            return;
-        }
+                return;
+            }
 
         // Set up polling to check database for progress updates
         const progressInterval = setInterval(async () => {
@@ -387,7 +387,7 @@ router.get('/machine/:machineId/status', auth, async (req, res) => {
 
                 // Send progress update
                 res.write(`data: ${JSON.stringify({
-                    success: true,
+                success: true,
                     status: updatedMachine.training_status,
                     progress: updatedMachine.training_progress || 0,
                     message: updatedMachine.training_message || 'Training in progress...'
@@ -396,10 +396,10 @@ router.get('/machine/:machineId/status', auth, async (req, res) => {
                 // If training is completed or failed, end the connection
                 if (updatedMachine.training_status === 'completed' || updatedMachine.training_status === 'failed') {
                     clearInterval(progressInterval);
-                    res.end();
-                }
+                res.end();
+            }
 
-            } catch (error) {
+        } catch (error) {
                 console.error('Error polling training status:', error);
                 clearInterval(progressInterval);
                 res.write(`data: ${JSON.stringify({
@@ -425,10 +425,10 @@ router.get('/machine/:machineId/status', auth, async (req, res) => {
         }, 180000); // Reduced from 10 minutes to 3 minutes
 
         // Clean up on client disconnect
-        req.on('close', () => {
+    req.on('close', () => {
             clearInterval(progressInterval);
             clearTimeout(trainingTimeout);
-        });
+    });
 
     } catch (error) {
         console.error('Training status error:', error);
@@ -1098,7 +1098,7 @@ async function startUltraSimpleTraining(machine, user, csvFilePath) {
             try {
                 // Parse training results from output - be more robust
                 let trainingResult = null;
-                const lines = rawOutput.split('\n');
+                    const lines = rawOutput.split('\n');
                 
                 // Look for the success message with stats
                 for (const line of lines) {
@@ -1431,7 +1431,7 @@ router.get('/machine/:id/training-params', async (req, res) => {
         };
 
         res.json(trainingParams);
-
+        
     } catch (error) {
         console.error('Get training params error:', error);
         res.status(500).json({ success: false, message: 'Server error while retrieving training parameters' });
@@ -1481,13 +1481,13 @@ router.get('/machines/training-params', async (req, res) => {
 router.put('/machine/:id/update-params', async (req, res) => {
     try {
         const { id } = req.params;
-
+        
         const machine = await Machine.findById(id);
 
         if (!machine) {
             return res.status(404).json({ success: false, message: 'Machine not found' });
         }
-        
+
         if (machine.userId.toString() !== req.user._id.toString()) {
             return res.status(403).json({ success: false, message: 'User not authorized' });
         }
@@ -1580,8 +1580,8 @@ router.put('/machine/:id/update-params', async (req, res) => {
             training_status: 'completed'
         });
 
-        res.json({
-            success: true,
+        res.json({ 
+            success: true, 
             message: 'Machine training parameters updated successfully',
             machine_id: machine._id,
             machine_name: machine.machineName,
@@ -1612,7 +1612,7 @@ router.post('/machine/:id/calculate-risk-rul', auth, upload.single('csvFile'), a
         if (machine.userId.toString() !== req.user._id.toString()) {
             return res.status(403).json({ success: false, message: 'User not authorized' });
         }
-
+        
         // Check if machine has been trained
         if (!machine.trained || !machine.model_params) {
             return res.status(400).json({ 
@@ -1696,7 +1696,7 @@ async function startPredictionWithStoredParams(machine, csvFilePath) {
         console.log(`🚀 Starting Python prediction process: python3 ${pythonScriptPath} ${userId} ${machineId} ${csvFilePath}`);
         
         const pythonProcess = spawn('python3', [
-            pythonScriptPath,
+            pythonScriptPath, 
             userId,
             machineId,
             csvFilePath
@@ -1704,7 +1704,7 @@ async function startPredictionWithStoredParams(machine, csvFilePath) {
             stdio: ['pipe', 'pipe', 'pipe'],
             env: env
         });
-        
+
         let rawOutput = '';
         let processStartTime = Date.now();
         
@@ -1714,33 +1714,33 @@ async function startPredictionWithStoredParams(machine, csvFilePath) {
             rawOutput += output;
             console.log(`[Python prediction stdout for ${machineId}]: ${output.trim()}`);
         });
-        
+
         pythonProcess.stderr.on('data', (data) => {
             const errorOutput = data.toString();
             console.error(`[Prediction Error for ${machineId}]: ${errorOutput}`);
         });
-        
+
         // Add timeout to prevent hanging
         const predictionTimeout = setTimeout(() => {
             console.error(`⏰ Prediction timeout for machine ${machineId} after 60 seconds`);
             pythonProcess.kill('SIGTERM');
             throw new Error('Prediction timed out. Please try again with a smaller file.');
         }, 60000); // 60 seconds timeout
-        
+
         // Wait for process completion
         return new Promise((resolve, reject) => {
-            pythonProcess.on('close', async (code) => {
-                clearTimeout(predictionTimeout);
-                const predictionDuration = Date.now() - processStartTime;
+        pythonProcess.on('close', async (code) => {
+            clearTimeout(predictionTimeout);
+            const predictionDuration = Date.now() - processStartTime;
                 console.log(`⏱️ Prediction process for machine ${machineId} completed in ${predictionDuration}ms with exit code ${code}`);
-                
-                if (code !== 0) {
+
+            if (code !== 0) {
                     console.error(`❌ Prediction failed for machine ${machineId} with exit code ${code}`);
                     reject(new Error('Prediction failed. Please check your data and try again.'));
                     return;
-                }
-                
-                try {
+            }
+
+            try {
                     // Parse prediction results from output
                     let predictionResult = null;
                     const lines = rawOutput.split('\n');
@@ -1810,7 +1810,7 @@ async function startPredictionWithStoredParams(machine, csvFilePath) {
                         console.log(`⏰ RUL estimate: ${rulResult.rulEstimate} days`);
                         
                         resolve(finalResult);
-                    } else {
+                } else {
                         console.error('❌ No prediction results found in output. Raw output:', rawOutput);
                         reject(new Error('Prediction completed but no valid results returned'));
                     }
@@ -1821,7 +1821,7 @@ async function startPredictionWithStoredParams(machine, csvFilePath) {
                 }
             });
         });
-        
+
     } catch (error) {
         console.error(`❌ Error starting prediction for machine ${machineId}:`, error);
         throw error;
