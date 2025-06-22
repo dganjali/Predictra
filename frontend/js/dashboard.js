@@ -116,6 +116,16 @@ function initDashboard() {
     // Initialize confirmation modal
     initConfirmationModal();
     console.log('✅ Confirmation modal initialized');
+
+    // Initialize prediction modal listeners
+    const predictionForm = document.getElementById('predictionForm');
+    if (predictionForm) {
+        predictionForm.addEventListener('submit', handleSinglePrediction);
+    }
+    const csvPredictionForm = document.getElementById('csvPredictionForm');
+    if (csvPredictionForm) {
+        csvPredictionForm.addEventListener('submit', handleCsvPrediction);
+    }
     
     // Load dashboard data (placeholder for future implementation)
     console.log('🔄 Loading dashboard data...');
@@ -221,24 +231,33 @@ function initMachineManagement() {
         });
     }
 
-    // Initialize prediction modal - only set up the modal structure, not the form handlers
+    // Initialize prediction modal - and its form handlers
     const predictionModal = document.getElementById('predictionModal');
     const closePredictionBtn = document.getElementById('closePredictionModal');
     const cancelPredictionBtn = document.getElementById('cancelPrediction');
+    const cancelCsvPredictionBtn = document.getElementById('cancelCsvPrediction');
+    const predictionForm = document.getElementById('predictionForm');
+    const csvPredictionForm = document.getElementById('csvPredictionForm');
 
     if (predictionModal) {
         const closeModalFunc = () => predictionModal.classList.remove('show');
-        if (closePredictionBtn) {
-            closePredictionBtn.addEventListener('click', closeModalFunc);
-        }
-        if (cancelPredictionBtn) {
-            cancelPredictionBtn.addEventListener('click', closeModalFunc);
-        }
+        
+        if (closePredictionBtn) closePredictionBtn.addEventListener('click', closeModalFunc);
+        if (cancelPredictionBtn) cancelPredictionBtn.addEventListener('click', closeModalFunc);
+        if (cancelCsvPredictionBtn) cancelCsvPredictionBtn.addEventListener('click', closeModalFunc);
+
         predictionModal.addEventListener('click', (e) => {
             if (e.target === predictionModal) {
                 closeModalFunc();
             }
         });
+
+        if (predictionForm) {
+            predictionForm.addEventListener('submit', handleSinglePrediction);
+        }
+        if (csvPredictionForm) {
+            csvPredictionForm.addEventListener('submit', handleCsvPrediction);
+        }
     }
 
     // Initialize the new training modal
@@ -1183,19 +1202,6 @@ function openPredictionModal(machineId) {
                 csvPredictionForm.style.display = 'block';
             }
         });
-    });
-    
-    // Handle form submissions
-    predictionForm.addEventListener('submit', handleSinglePrediction);
-    csvPredictionForm.addEventListener('submit', handleCsvPrediction);
-    
-    // Handle cancel buttons
-    document.getElementById('cancelPrediction').addEventListener('click', () => {
-        modal.classList.remove('show');
-    });
-    
-    document.getElementById('cancelCsvPrediction').addEventListener('click', () => {
-        modal.classList.remove('show');
     });
 }
 
