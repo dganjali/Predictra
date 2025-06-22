@@ -530,10 +530,95 @@ a:hover {
 }
 
 .footer-bottom {
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-    padding-top: 1rem;
     text-align: center;
-    color: rgba(255, 255, 255, 0.5);
+    margin-top: 2rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--border-light);
+}
+
+.footer-bottom p {
+    color: var(--text-tertiary);
+}
+
+/* About Page - Try It Now Section */
+.try-it-now {
+    padding: 4rem 0;
+    background-color: var(--bg-dark);
+}
+
+.try-it-now h2 {
+    text-align: center;
+    color: var(--bg-primary);
+}
+
+.terminal-window {
+    max-width: 800px;
+    margin: 2rem auto 0;
+    background-color: #1e293b;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-xl);
+    overflow: hidden;
+}
+
+.terminal-header {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem;
+    background-color: #334155;
+}
+
+.terminal-buttons {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.terminal-button {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+
+.terminal-button.red { background-color: #ef4444; }
+.terminal-button.yellow { background-color: #f59e0b; }
+.terminal-button.green { background-color: #10b981; }
+
+.terminal-title {
+    flex-grow: 1;
+    text-align: center;
+    color: var(--text-tertiary);
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+}
+
+.terminal-body {
+    height: 250px;
+    padding: 1.5rem;
+    overflow: hidden;
+    position: relative;
+}
+
+.scrolling-text-container {
+    position: absolute;
+    top: 0;
+    width: 100%;
+    animation: scroll-up 20s linear infinite;
+}
+
+.scrolling-text-container p {
+    font-family: var(--font-mono);
+    color: #cbd5e1;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    white-space: nowrap;
+}
+
+@keyframes scroll-up {
+    from {
+        top: 100%;
+    }
+    to {
+        top: -100%;
+    }
 }
 
 /* Authentication Pages */
@@ -591,7 +676,32 @@ a:hover {
     display: block;
     margin-bottom: 0.5rem;
     font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.form-control {
+    display: block;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+    line-height: 1.5;
     color: var(--text-primary);
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.form-control:focus {
+    color: var(--text-primary);
+    background-color: var(--bg-primary);
+    border-color: var(--primary-color);
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.25);
+}
+
+.form-control::placeholder {
+    color: var(--text-tertiary);
 }
 
 .input-group {
