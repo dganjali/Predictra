@@ -78,10 +78,17 @@ class UltraSimpleTrainer:
             logger.info("⚠️ No pretrained model found, will train from scratch")
     
     def _create_model_directory(self) -> str:
-        """Create model directory with logging."""
+        """Create model directory with logging, using a configurable base path."""
         try:
+            # Use an environment variable for the base storage path for better flexibility in deployment
+            base_path = os.getenv('MODEL_STORAGE_PATH', os.path.dirname(__file__))
+
+            # Ensure the path is absolute
+            if not os.path.isabs(base_path):
+                base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), base_path))
+
             model_dir = os.path.join(
-                os.path.dirname(__file__),
+                base_path,
                 'user_models',
                 f'user_{self.user_id}',
                 f'machine_{self.machine_id}'
