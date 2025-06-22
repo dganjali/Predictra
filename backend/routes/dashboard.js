@@ -1229,9 +1229,10 @@ async function startUltraSimpleTraining(machine, user, csvFilePath) {
                         console.log(`🔮 Running automatic prediction on training data for machine ${machineId}`);
                         
                         // Wait a moment for file system to sync
-                        await new Promise(resolve => setTimeout(resolve, 1000));
+                        await new Promise(resolve => setTimeout(resolve, 2000));
                         
-                        const predictionResult = await startPredictionWithStoredParams(machine, csvFilePath);
+                        // For automatic prediction after training, use a longer timeout
+                        const predictionResult = await startPredictionWithStoredParams(machine, csvFilePath, 45000); // 45 second timeout
                         
                         // Update machine with prediction results
                         await Machine.findByIdAndUpdate(machineId, {
@@ -1634,8 +1635,8 @@ router.post('/machine/:id/calculate-risk-rul', auth, upload.single('csvFile'), a
         const csvFilePath = req.file.path;
         console.log(`🔍 Calculating risk and RUL for machine ${id} using CSV: ${csvFilePath}`);
 
-        // Start prediction process using the machine's stored parameters
-        const predictionResult = await startPredictionWithStoredParams(machine, csvFilePath);
+        // Start prediction process using the machine's stored parameters with longer timeout
+        const predictionResult = await startPredictionWithStoredParams(machine, csvFilePath, 45000); // 45 second timeout
 
         // Clean up uploaded file
         if (fs.existsSync(csvFilePath)) {
@@ -1666,7 +1667,7 @@ router.post('/machine/:id/calculate-risk-rul', auth, upload.single('csvFile'), a
 });
 
 // Helper function to start prediction using stored parameters
-async function startPredictionWithStoredParams(machine, csvFilePath) {
+async function startPredictionWithStoredParams(machine, csvFilePath, customTimeout = 45000) {
     const machineId = machine._id.toString();
     const userId = machine.userId.toString();
     
@@ -1677,6 +1678,10 @@ async function startPredictionWithStoredParams(machine, csvFilePath) {
         if (!fs.existsSync(csvFilePath)) {
             throw new Error('Prediction CSV file not found');
         }
+        
+        // Create a smaller version of CSV for faster processing
+        const optimizedCsvPath = await createOptimizedCsvForPrediction(csvFilePath);
+        const finalCsvPath = optimizedCsvPath || csvFilePath;
         
         // Get stored model parameters
         const modelParams = machine.model_params;
@@ -1713,13 +1718,13 @@ async function startPredictionWithStoredParams(machine, csvFilePath) {
         };
         
         // Start Python prediction process
-        console.log(`🚀 Starting Python prediction process: python3 ${pythonScriptPath} ${userId} ${machineId} ${csvFilePath}`);
+        console.log(`🚀 Starting Python prediction process: python3 ${pythonScriptPath} ${userId} ${machineId} ${finalCsvPath}`);
         
         const pythonProcess = spawn('python3', [
             pythonScriptPath, 
             userId,
             machineId,
-            csvFilePath
+            finalCsvPath
         ], {
             stdio: ['pipe', 'pipe', 'pipe'],
             env: env
@@ -1740,25 +1745,43 @@ async function startPredictionWithStoredParams(machine, csvFilePath) {
             console.error(`[Prediction Error for ${machineId}]: ${errorOutput}`);
         });
 
-        // Add timeout to prevent hanging
+        // Add timeout to prevent hanging - reduced for faster feedback
         const predictionTimeout = setTimeout(() => {
-            console.error(`⏰ Prediction timeout for machine ${machineId} after 60 seconds`);
+            console.error(`⏰ Prediction timeout for machine ${machineId} after 30 seconds`);
             pythonProcess.kill('SIGTERM');
-            throw new Error('Prediction timed out. Please try again with a smaller file.');
-        }, 60000); // 60 seconds timeout
+            // Don't throw here, handle in the promise rejection below
+        }, 30000); // 30 seconds timeout
 
         // Wait for process completion
         return new Promise((resolve, reject) => {
-        pythonProcess.on('close', async (code) => {
-            clearTimeout(predictionTimeout);
-            const predictionDuration = Date.now() - processStartTime;
+            let timeoutOccurred = false;
+            
+            // Handle timeout
+            const timeoutHandler = setTimeout(() => {
+                timeoutOccurred = true;
+                console.error(`⏰ Prediction timeout for machine ${machineId} after ${customTimeout/1000} seconds`);
+                pythonProcess.kill('SIGTERM');
+                clearTimeout(predictionTimeout);
+                reject(new Error(`Prediction timed out after ${customTimeout/1000} seconds. Please try again with a smaller file or check if the model files exist.`));
+            }, customTimeout);
+            
+            pythonProcess.on('close', async (code) => {
+                clearTimeout(timeoutHandler);
+                clearTimeout(predictionTimeout);
+                const predictionDuration = Date.now() - processStartTime;
+                
+                if (timeoutOccurred) {
+                    return; // Already handled timeout
+                }
+                
                 console.log(`⏱️ Prediction process for machine ${machineId} completed in ${predictionDuration}ms with exit code ${code}`);
 
-            if (code !== 0) {
+                if (code !== 0) {
                     console.error(`❌ Prediction failed for machine ${machineId} with exit code ${code}`);
-                    reject(new Error('Prediction failed. Please check your data and try again.'));
+                    console.error(`❌ Python output:`, rawOutput);
+                    reject(new Error(`Prediction failed with exit code ${code}. Please check your data and try again.`));
                     return;
-            }
+                }
 
             try {
                     // Parse prediction results from output
@@ -1829,6 +1852,12 @@ async function startPredictionWithStoredParams(machine, csvFilePath) {
                         console.log(`🏥 Health score: ${healthScore}`);
                         console.log(`⏰ RUL estimate: ${rulResult.rulEstimate} days`);
                         
+                        // Clean up optimized file if it was created
+                        if (finalCsvPath !== csvFilePath && fs.existsSync(finalCsvPath)) {
+                            fs.unlinkSync(finalCsvPath);
+                            console.log(`🧹 Cleaned up optimized CSV: ${finalCsvPath}`);
+                        }
+                        
                         resolve(finalResult);
                 } else {
                         console.error('❌ No prediction results found in output. Raw output:', rawOutput);
@@ -1893,6 +1922,53 @@ function calculateRULWithMachineParams(riskScore, isAnomaly = false, modelParams
             rul_threshold: RUL_THRESHOLD
         }
     };
+}
+
+// Helper function to create optimized CSV for faster prediction
+async function createOptimizedCsvForPrediction(originalCsvPath) {
+    try {
+        const stats = fs.statSync(originalCsvPath);
+        const fileSizeInMB = stats.size / (1024 * 1024);
+        
+        // Only optimize if file is larger than 1MB
+        if (fileSizeInMB <= 1) {
+            return null; // Use original file
+        }
+        
+        console.log(`📦 Optimizing CSV file (${fileSizeInMB.toFixed(2)}MB) for faster prediction...`);
+        
+        // Read first 1000 lines for prediction
+        const readline = require('readline');
+        const optimizedPath = originalCsvPath.replace('.csv', '_optimized.csv');
+        
+        const fileStream = fs.createReadStream(originalCsvPath);
+        const rl = readline.createInterface({
+            input: fileStream,
+            crlfDelay: Infinity
+        });
+        
+        const writeStream = fs.createWriteStream(optimizedPath);
+        let lineCount = 0;
+        const maxLines = 1000;
+        
+        for await (const line of rl) {
+            writeStream.write(line + '\n');
+            lineCount++;
+            if (lineCount >= maxLines) {
+                break;
+            }
+        }
+        
+        writeStream.end();
+        rl.close();
+        
+        console.log(`✅ Created optimized CSV with ${lineCount} rows: ${optimizedPath}`);
+        return optimizedPath;
+        
+    } catch (error) {
+        console.error('❌ Error creating optimized CSV:', error);
+        return null; // Fall back to original file
+    }
 }
 
 module.exports = router;
