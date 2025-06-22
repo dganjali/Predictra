@@ -1222,6 +1222,29 @@ async function startUltraSimpleTraining(machine, user, csvFilePath) {
                     console.log(`🎯 Training samples: ${trainingResult.training_samples}`);
                     console.log(`⏱️ Training duration: ${trainingDuration}ms`);
                     console.log(`📁 Parameters saved for user: ${machine.userId}, machine: ${machineId}`);
+                    
+                    // Run automatic prediction on training data
+                    try {
+                        console.log(`🔮 Running automatic prediction on training data for machine ${machineId}`);
+                        const predictionResult = await startPredictionWithStoredParams(machine, csvFilePath);
+                        
+                        // Update machine with prediction results
+                        await Machine.findByIdAndUpdate(machineId, {
+                            healthScore: predictionResult.health_score,
+                            rulEstimate: predictionResult.rul_estimate,
+                            status: predictionResult.machine_status,
+                            lastUpdated: new Date()
+                        });
+                        
+                        console.log(`✅ Automatic prediction completed for machine ${machineId}`);
+                        console.log(`🏥 Health Score: ${predictionResult.health_score}`);
+                        console.log(`⏰ RUL Estimate: ${predictionResult.rul_estimate} days`);
+                        console.log(`📊 Machine Status: ${predictionResult.machine_status}`);
+                        
+                    } catch (predictionError) {
+                        console.error(`❌ Automatic prediction failed for machine ${machineId}:`, predictionError);
+                        // Don't fail the training if prediction fails
+                    }
                 } else {
                     console.error('❌ No training results found in output. Raw output:', rawOutput);
                     throw new Error('Training completed but no valid results returned');

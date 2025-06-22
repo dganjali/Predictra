@@ -609,23 +609,8 @@ function startTrainPolling(machineId) {
     const progressBar = document.getElementById('modalProgressBarTrain');
     const progressLabel = document.getElementById('modalProgressLabelTrain');
     const finishBtn = document.getElementById('finishTrainBtn');
-    const outputDisplay = document.getElementById('pythonOutputDisplay');
-    const clearOutputBtn = document.getElementById('clearOutputBtn');
 
     if (trainEventSource) trainEventSource.close();
-    
-    // Clear previous output
-    outputDisplay.innerHTML = '';
-    
-    // Add initial messages
-    addOutputLine('[System]', 'Initializing training environment...', 'info');
-    addOutputLine('[System]', 'Starting Python training script...', 'info');
-    
-    // Clear output button functionality
-    clearOutputBtn.addEventListener('click', () => {
-        outputDisplay.innerHTML = '';
-        addOutputLine('[System]', 'Output cleared', 'info');
-    });
     
     const token = localStorage.getItem('token');
     trainEventSource = new EventSource(`/api/dashboard/machine/${machineId}/status?token=${token}`);
@@ -636,29 +621,10 @@ function startTrainPolling(machineId) {
             progressBar.style.width = `${data.progress || 0}%`;
             progressLabel.textContent = data.message || 'Processing...';
 
-            // Add output line for progress updates
-            if (data.message) {
-                addOutputLine('[Progress]', `${data.progress}% - ${data.message}`, 'progress');
-            }
-
-            // Handle real-time detailed messages
-            if (data.detailedMessage) {
-                const timestamp = new Date(data.detailedMessage.timestamp).toLocaleTimeString();
-                addOutputLine(`[${timestamp}]`, data.detailedMessage.message, data.detailedMessage.type);
-            }
-
             // Handle heartbeat messages
             if (data.heartbeat) {
                 // Just keep the connection alive, no need to display anything
                 console.log('Heartbeat received from training process');
-            }
-
-            // Display detailed messages if available (for batch updates)
-            if (data.detailedMessages && data.detailedMessages.length > 0) {
-                data.detailedMessages.forEach(msg => {
-                    const timestamp = new Date(msg.timestamp).toLocaleTimeString();
-                    addOutputLine(`[${timestamp}]`, msg.message, msg.type);
-                });
             }
 
             if (data.status === 'completed' || data.status === 'failed') {
@@ -667,12 +633,9 @@ function startTrainPolling(machineId) {
                 finishBtn.style.display = 'inline-block';
                 
                 if (data.status === 'completed') {
-                    progressLabel.textContent = 'Training successful!';
-                    addOutputLine('[Success]', 'Training completed successfully!', 'success');
-                    addOutputLine('[System]', 'Model and configuration files saved', 'info');
+                    progressLabel.textContent = 'Training successful! Running initial prediction...';
                 } else {
                     progressLabel.textContent = `Training failed: ${data.message}`;
-                    addOutputLine('[Error]', `Training failed: ${data.message}`, 'error');
                 }
                 
                 loadDashboardData();
@@ -680,74 +643,15 @@ function startTrainPolling(machineId) {
         } else {
             trainEventSource.close();
             progressLabel.textContent = `Error: ${data.message}`;
-            addOutputLine('[Error]', `Connection error: ${data.message}`, 'error');
             finishBtn.style.display = 'inline-block';
         }
     };
 
     trainEventSource.onerror = () => {
         progressLabel.textContent = 'Error: Connection to server lost.';
-        addOutputLine('[Error]', 'Connection to server lost', 'error');
         finishBtn.style.display = 'inline-block';
         if (trainEventSource) trainEventSource.close();
     };
-}
-
-// Helper function to add output lines
-function addOutputLine(timestamp, message, type = 'info') {
-    const outputDisplay = document.getElementById('pythonOutputDisplay');
-    const outputLine = document.createElement('div');
-    outputLine.className = 'output-line';
-    
-    const timestampSpan = document.createElement('span');
-    timestampSpan.className = 'timestamp';
-    timestampSpan.textContent = timestamp;
-    
-    const messageSpan = document.createElement('span');
-    messageSpan.className = `message ${type}`;
-    messageSpan.textContent = message;
-    
-    outputLine.appendChild(timestampSpan);
-    outputLine.appendChild(messageSpan);
-    
-    outputDisplay.appendChild(outputLine);
-    
-    // Auto-scroll to bottom
-    outputDisplay.scrollTop = outputDisplay.scrollHeight;
-    
-    // Add epoch progress if it's an epoch message
-    if (message.includes('Epoch') && message.includes('Loss:')) {
-        addEpochProgress(message);
-    }
-}
-
-// Helper function to add epoch progress
-function addEpochProgress(message) {
-    const outputDisplay = document.getElementById('pythonOutputDisplay');
-    
-    // Extract epoch info from message
-    const epochMatch = message.match(/Epoch (\d+)\/(\d+)/);
-    const lossMatch = message.match(/Loss: ([\d.]+)/);
-    
-    if (epochMatch && lossMatch) {
-        const currentEpoch = parseInt(epochMatch[1]);
-        const totalEpochs = parseInt(epochMatch[2]);
-        const loss = parseFloat(lossMatch[1]);
-        const progress = (currentEpoch / totalEpochs) * 100;
-        
-        const epochProgress = document.createElement('div');
-        epochProgress.className = 'epoch-progress';
-        epochProgress.innerHTML = `
-            <span class="epoch-label">Epoch ${currentEpoch}/${totalEpochs}</span>
-            <div class="epoch-bar">
-                <div class="epoch-fill" style="width: ${progress}%"></div>
-            </div>
-            <span class="epoch-loss">${loss.toFixed(4)}</span>
-        `;
-        
-        outputDisplay.appendChild(epochProgress);
-        outputDisplay.scrollTop = outputDisplay.scrollHeight;
-    }
 }
 
 function showMessage(message, type = 'info') {
@@ -884,8 +788,9 @@ function displayMachines(machines) {
 
         const statusColor = getStatusColor(status);
         const lastUpdatedFormatted = lastUpdated ? new Date(lastUpdated).toLocaleString() : 'N/A';
-        const isTrained = modelStatus === 'trained' || 
-                         training_status === 'completed' ||
+        const isTrained = machine.trained || 
+                         machine.modelStatus === 'trained' || 
+                         machine.training_status === 'completed' ||
                          (machine.model_params && machine.model_params.source === 'pre_trained_model');
         
         let statusContent;
@@ -917,6 +822,7 @@ function displayMachines(machines) {
                     <div class="machine-title">
                         <i class="fas fa-cogs machine-icon"></i>
                         <h3>${machineName}</h3>
+                        ${isTrained ? '<span class="training-badge trained"><i class="fas fa-check-circle"></i> Trained</span>' : '<span class="training-badge untrained"><i class="fas fa-times-circle"></i> Not Trained</span>'}
                     </div>
                     <div class="machine-actions">
                         ${statusContent}
@@ -1151,7 +1057,10 @@ function viewMachineDetails(machineId) {
         return `<div class="detail-pair"><span class="label">${label}</span><span class="value">${val}</span></div>`;
     };
 
-    const isTrained = machine.training_status === 'completed';
+    const isTrained = machine.trained || 
+                     machine.modelStatus === 'trained' || 
+                     machine.training_status === 'completed' ||
+                     (machine.model_params && machine.model_params.source === 'pre_trained_model');
     const trainingParams = machine.model_params || {};
 
     modalBody.innerHTML = `
@@ -1209,12 +1118,13 @@ function openPredictionModal(machineId) {
     }
     
     // Check if model is trained
-    const isTrained = machine.modelStatus === 'trained' || 
+    const isTrained = machine.trained || 
+                     machine.modelStatus === 'trained' || 
                      machine.training_status === 'completed' ||
                      (machine.model_params && machine.model_params.source === 'pre_trained_model');
     
     if (!isTrained) {
-        showMessage('Model for this machine is not trained yet. Please train the model first.', 'error');
+        showMessage('This machine has not been trained yet. Please train the machine first to enable risk and RUL calculation.', 'error');
         return;
     }
     
@@ -1318,41 +1228,42 @@ async function handleSinglePrediction(e) {
         const result = await response.json();
 
         if (result.success) {
+            const data = result.data;
             // Update the result display
-            document.getElementById('riskScore').textContent = result.data.reconstruction_error.toFixed(4);
-            document.getElementById('isAnomaly').textContent = result.data.is_anomaly ? 'Yes' : 'No';
-            document.getElementById('anomalyThreshold').textContent = `(Threshold: ${result.data.threshold.toFixed(4)})`;
+            document.getElementById('riskScore').textContent = data.reconstruction_error.toFixed(4);
+            document.getElementById('isAnomaly').textContent = data.is_anomaly ? 'Yes' : 'No';
+            document.getElementById('anomalyThreshold').textContent = `(Threshold: ${data.threshold.toFixed(4)})`;
             
             // Add additional information if available
-            if (result.data.healthScore !== undefined) {
+            if (data.healthScore !== undefined) {
                 const healthScoreElement = document.getElementById('healthScore');
                 if (healthScoreElement) {
-                    healthScoreElement.textContent = result.data.healthScore;
+                    healthScoreElement.textContent = data.healthScore;
                 }
             }
             
-            if (result.data.rulEstimate !== undefined) {
+            if (data.rulEstimate !== undefined) {
                 const rulEstimateElement = document.getElementById('rulEstimate');
                 if (rulEstimateElement) {
-                    rulEstimateElement.textContent = `${result.data.rulEstimate} days`;
+                    rulEstimateElement.textContent = `${data.rulEstimate} days`;
                 }
             }
             
-            if (result.data.status !== undefined) {
+            if (data.status !== undefined) {
                 const statusElement = document.getElementById('riskStatus');
                 if (statusElement) {
-                    statusElement.textContent = result.data.status;
-                    statusElement.className = `risk-status ${result.data.status}`;
+                    statusElement.textContent = data.status;
+                    statusElement.className = `risk-status ${data.status}`;
                 }
             }
             
             // Show sensor warning if sensors are missing
-            if (result.data.sensorWarning) {
+            if (data.sensorWarning) {
                 const warningDiv = document.createElement('div');
                 warningDiv.className = 'sensor-warning';
                 warningDiv.innerHTML = `
                     <i class="fas fa-exclamation-triangle"></i>
-                    <span>${result.data.sensorWarning}</span>
+                    <span>${data.sensorWarning}</span>
                 `;
                 
                 // Insert warning after the result grid
@@ -1367,9 +1278,9 @@ async function handleSinglePrediction(e) {
             // Update the machine in the allMachines array and refresh the display
             const machineIndex = allMachines.findIndex(m => m._id === currentPredictionMachineId);
             if (machineIndex !== -1) {
-                allMachines[machineIndex].healthScore = result.data.healthScore || allMachines[machineIndex].healthScore;
-                allMachines[machineIndex].rulEstimate = result.data.rulEstimate || allMachines[machineIndex].rulEstimate;
-                allMachines[machineIndex].status = result.data.status || allMachines[machineIndex].status;
+                allMachines[machineIndex].healthScore = data.healthScore || allMachines[machineIndex].healthScore;
+                allMachines[machineIndex].rulEstimate = data.rulEstimate || allMachines[machineIndex].rulEstimate;
+                allMachines[machineIndex].status = data.status || allMachines[machineIndex].status;
                 allMachines[machineIndex].lastUpdated = new Date().toISOString();
                 
                 // Refresh the dashboard to show updated values
@@ -1413,7 +1324,7 @@ async function handleCsvPrediction(e) {
             return;
         }
         
-        const response = await fetch(`/api/dashboard/machine/${currentPredictionMachineId}/predict-csv`, {
+        const response = await fetch(`/api/dashboard/machine/${currentPredictionMachineId}/calculate-risk-rul`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -1424,52 +1335,62 @@ async function handleCsvPrediction(e) {
         const result = await response.json();
 
         if (result.success) {
-            const summary = result.data.summary;
-            const analysisResults = result.data.analysisResults;
+            const results = result.results;
             
             // Update the CSV result display
-            document.getElementById('totalReadings').textContent = summary.totalReadings;
-            document.getElementById('anomalyCount').textContent = summary.anomalyCount;
-            document.getElementById('anomalyPercentage').textContent = `${summary.anomalyPercentage}%`;
-            document.getElementById('avgRiskScore').textContent = summary.avgRiskScore.toFixed(4);
-            document.getElementById('csvHealthScore').textContent = summary.healthScore;
-            document.getElementById('csvRulEstimate').textContent = `${summary.rulEstimate} days`;
-            document.getElementById('csvRiskStatus').textContent = summary.status;
+            document.getElementById('totalReadings').textContent = results.processed_samples;
+            document.getElementById('anomalyCount').textContent = results.is_anomaly ? '1' : '0';
+            document.getElementById('anomalyPercentage').textContent = results.is_anomaly ? '100%' : '0%';
+            document.getElementById('avgRiskScore').textContent = results.anomaly_score.toFixed(4);
+            document.getElementById('csvHealthScore').textContent = results.health_score;
+            document.getElementById('csvRulEstimate').textContent = `${results.rul_estimate} days`;
+            document.getElementById('csvRiskStatus').textContent = results.machine_status;
             
             // Add status classes for styling
-            document.getElementById('csvHealthScore').className = `health-score ${summary.healthScore >= 80 ? 'excellent' : summary.healthScore >= 60 ? 'good' : summary.healthScore >= 40 ? 'warning' : 'critical'}`;
-            document.getElementById('csvRiskStatus').className = `risk-status ${summary.status}`;
+            document.getElementById('csvHealthScore').className = `health-score ${results.health_score >= 80 ? 'excellent' : results.health_score >= 60 ? 'good' : results.health_score >= 40 ? 'warning' : 'critical'}`;
+            document.getElementById('csvRiskStatus').className = `risk-status ${results.machine_status}`;
             
-            // Display anomaly details
+            // Display prediction details
             const anomalyDetails = document.getElementById('anomalyDetails');
-            if (analysisResults && analysisResults.length > 0) {
-                const anomalies = analysisResults.filter(r => r.is_anomaly);
-                if (anomalies.length > 0) {
-                    anomalyDetails.innerHTML = `
-                        <h4>Anomaly Details (${anomalies.length} detected)</h4>
-                        <div class="anomaly-list">
-                            ${anomalies.slice(0, 10).map(anomaly => `
-                                <div class="anomaly-item">
-                                    <div>
-                                        <span class="timestamp">${anomaly.timestamp || `Row ${anomaly.row_index}`}</span>
-                                        <span class="row-index">(Row ${anomaly.row_index})</span>
-                                    </div>
-                                    <span class="error-score">Error: ${anomaly.reconstruction_error.toFixed(4)}</span>
-                                </div>
-                            `).join('')}
-                            ${anomalies.length > 10 ? `<div class="anomaly-item"><em>... and ${anomalies.length - 10} more anomalies</em></div>` : ''}
-                        </div>
-                    `;
-                } else {
-                    anomalyDetails.innerHTML = `
-                        <h4>Anomaly Details</h4>
-                        <div class="anomaly-list">
-                            <div class="anomaly-item">
-                                <span>No anomalies detected in this data window</span>
+            if (results.is_anomaly) {
+                anomalyDetails.innerHTML = `
+                    <h4>Anomaly Detected</h4>
+                    <div class="anomaly-list">
+                        <div class="anomaly-item">
+                            <div>
+                                <span class="timestamp">Overall Analysis</span>
                             </div>
+                            <span class="error-score">Anomaly Score: ${results.anomaly_score.toFixed(4)}</span>
                         </div>
-                    `;
-                }
+                        <div class="anomaly-item">
+                            <span>Risk Percentage: ${results.risk_percentage}%</span>
+                        </div>
+                        <div class="anomaly-item">
+                            <span>Prediction Confidence: ${(results.prediction_confidence * 100).toFixed(1)}%</span>
+                        </div>
+                        <div class="anomaly-item">
+                            <span>Model Threshold Used: ${results.model_threshold_used.toFixed(4)}</span>
+                        </div>
+                    </div>
+                `;
+            } else {
+                anomalyDetails.innerHTML = `
+                    <h4>Analysis Results</h4>
+                    <div class="anomaly-list">
+                        <div class="anomaly-item">
+                            <span>No anomalies detected in this data</span>
+                        </div>
+                        <div class="anomaly-item">
+                            <span>Anomaly Score: ${results.anomaly_score.toFixed(4)}</span>
+                        </div>
+                        <div class="anomaly-item">
+                            <span>Risk Percentage: ${results.risk_percentage}%</span>
+                        </div>
+                        <div class="anomaly-item">
+                            <span>Prediction Confidence: ${(results.prediction_confidence * 100).toFixed(1)}%</span>
+                        </div>
+                    </div>
+                `;
             }
             
             resultContainer.style.display = 'block';
@@ -1477,9 +1398,9 @@ async function handleCsvPrediction(e) {
             // Update the machine in the allMachines array and refresh the display
             const machineIndex = allMachines.findIndex(m => m._id === currentPredictionMachineId);
             if (machineIndex !== -1) {
-                allMachines[machineIndex].healthScore = summary.healthScore;
-                allMachines[machineIndex].rulEstimate = summary.rulEstimate;
-                allMachines[machineIndex].status = summary.status;
+                allMachines[machineIndex].healthScore = results.health_score;
+                allMachines[machineIndex].rulEstimate = results.rul_estimate;
+                allMachines[machineIndex].status = results.machine_status;
                 allMachines[machineIndex].lastUpdated = new Date().toISOString();
                 
                 // Refresh the dashboard to show updated values
@@ -1488,9 +1409,9 @@ async function handleCsvPrediction(e) {
                 }, 1000);
             }
             
-            showMessage('CSV analysis completed successfully!', 'success');
+            showMessage('Risk and RUL calculation completed successfully!', 'success');
         } else {
-            showMessage(result.message || 'CSV analysis failed.', 'error');
+            showMessage(result.message || 'Risk and RUL calculation failed.', 'error');
             resultContainer.style.display = 'none';
         }
 
@@ -1621,4 +1542,12 @@ window.dashboardUtils = {
     formatPercentage,
     getStatusColor,
     loadDashboardData
-}; 
+};
+
+// Helper function to force garbage collection if available
+function forceGarbageCollection() {
+    if (global.gc) {
+        global.gc();
+        console.log('🧹 Forced garbage collection');
+    }
+} 

@@ -912,8 +912,13 @@ a:hover {
 .machine-card .machine-title {
     display: flex;
     align-items: center;
-    gap: 1rem;
-    font-size: 1.1rem;
+    gap: 0.75rem;
+    flex: 1;
+}
+
+.machine-card .machine-title h3 {
+    margin: 0;
+    font-size: 1.125rem;
     font-weight: 600;
     color: var(--text-primary);
 }
@@ -2714,4 +2719,30 @@ a:hover {
 
 .sensor-warning span {
     line-height: 1.4;
+}
+
+.training-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
+.training-badge.trained {
+    background-color: var(--success-color);
+    color: white;
+}
+
+.training-badge.untrained {
+    background-color: var(--text-tertiary);
+    color: white;
+}
+
+.training-badge i {
+    font-size: 0.625rem;
 }
