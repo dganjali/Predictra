@@ -142,6 +142,10 @@ const machineSchema = new mongoose.Schema({
     enum: ['none', 'pending', 'in_progress', 'completed', 'failed'],
     default: 'none'
   },
+  trained: {
+    type: Boolean,
+    default: false
+  },
   training_progress: {
     type: Number,
     default: 0
