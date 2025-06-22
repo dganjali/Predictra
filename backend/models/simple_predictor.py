@@ -51,6 +51,21 @@ class SimplePredictor:
     def load_model_and_params(self):
         """Load the trained model, scaler, and parameters."""
         try:
+            logger.info(f"🔍 Looking for model files in: {self.model_dir}")
+            
+            # Check if model directory exists
+            if not os.path.exists(self.model_dir):
+                logger.error(f"❌ Model directory does not exist: {self.model_dir}")
+                return False
+            
+            # List files in the model directory for debugging
+            try:
+                files_in_dir = os.listdir(self.model_dir)
+                logger.info(f"📁 Files in model directory: {files_in_dir}")
+            except Exception as e:
+                logger.error(f"❌ Cannot list files in model directory: {e}")
+                return False
+            
             # Load model
             model_path = os.path.join(self.model_dir, 'model.h5')
             if os.path.exists(model_path):
@@ -74,7 +89,7 @@ class SimplePredictor:
             if os.path.exists(columns_path):
                 with open(columns_path, 'r') as f:
                     self.trained_columns = json.load(f)
-                logger.info(f"✅ Loaded columns from {columns_path}")
+                logger.info(f"✅ Loaded columns from {columns_path}: {self.trained_columns}")
             else:
                 logger.error(f"❌ Columns file not found: {columns_path}")
                 return False
@@ -94,6 +109,8 @@ class SimplePredictor:
             
         except Exception as e:
             logger.error(f"❌ Error loading model and parameters: {e}")
+            import traceback
+            logger.error(f"❌ Traceback: {traceback.format_exc()}")
             return False
     
     def load_and_preprocess_data(self, csv_path: str) -> np.ndarray:

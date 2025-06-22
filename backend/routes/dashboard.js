@@ -1227,6 +1227,10 @@ async function startUltraSimpleTraining(machine, user, csvFilePath) {
                     // Run automatic prediction on training data
                     try {
                         console.log(`🔮 Running automatic prediction on training data for machine ${machineId}`);
+                        
+                        // Wait a moment for file system to sync
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                        
                         const predictionResult = await startPredictionWithStoredParams(machine, csvFilePath);
                         
                         // Update machine with prediction results
@@ -1244,7 +1248,11 @@ async function startUltraSimpleTraining(machine, user, csvFilePath) {
                         
                     } catch (predictionError) {
                         console.error(`❌ Automatic prediction failed for machine ${machineId}:`, predictionError);
-                        // Don't fail the training if prediction fails
+                        console.error(`❌ Prediction error details:`, predictionError.message);
+                        // Don't fail the training if prediction fails - just log it
+                        await Machine.findByIdAndUpdate(machineId, {
+                            training_message: `Training completed successfully! Used ${trainingResult.training_samples} samples. (Note: Automatic prediction failed - please run prediction manually)`,
+                        });
                     }
                 } else {
                     console.error('❌ No training results found in output. Raw output:', rawOutput);
@@ -1672,8 +1680,20 @@ async function startPredictionWithStoredParams(machine, csvFilePath) {
         
         // Get stored model parameters
         const modelParams = machine.model_params;
-        const trainedColumns = modelParams.trained_columns || machine.training_columns || [];
+        if (!modelParams) {
+            throw new Error('No model parameters found. Please train the model first.');
+        }
+        
+        const trainedColumns = modelParams.sensor_columns || machine.training_columns || [];
         const threshold = modelParams.threshold;
+        
+        if (!threshold) {
+            throw new Error('No threshold found in model parameters. Please retrain the model.');
+        }
+        
+        if (!trainedColumns || trainedColumns.length === 0) {
+            throw new Error('No sensor columns found in model parameters. Please retrain the model.');
+        }
         
         console.log(`📊 Using stored parameters:`);
         console.log(`   - Threshold: ${threshold}`);

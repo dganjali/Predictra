@@ -340,9 +340,36 @@ def run_training_pipeline(user_id: str, machine_id: str, data_path: str, sensor_
             print(f"✅ Threshold data saved to {paths['threshold_file']}", file=sys.stderr)
             print(f"🎯 Training completed: {X_train.shape[0]} samples, MSE threshold: {mse_threshold:.6f}", file=sys.stderr)
             
-            # STAGE 5: Success
+            # STAGE 5: Success - Output the format expected by Node.js
             print(json.dumps({"type": "progress", "progress": 100, "message": "Training completed successfully!"}), flush=True)
-            print(json.dumps({"success": True, "message": "Training completed successfully."}), flush=True)
+            
+            # Output training stats in the format expected by dashboard.js
+            training_stats = {
+                "threshold": mse_threshold,
+                "mean_error": float(np.mean(train_mse_loss)),
+                "std_error": float(np.std(train_mse_loss)),
+                "min_error": float(np.min(train_mse_loss)),
+                "max_error": float(np.max(train_mse_loss)),
+                "percentile_90": float(np.percentile(train_mse_loss, 90)),
+                "percentile_95": float(np.percentile(train_mse_loss, 95)),
+                "percentile_99": float(np.percentile(train_mse_loss, 99)),
+                "final_loss": float(history.history['loss'][-1]) if 'history' in locals() and history.history['loss'] else 0.0,
+                "final_val_loss": float(history.history['val_loss'][-1]) if 'history' in locals() and history.history.get('val_loss') else 0.0,
+                "epochs_trained": N_EPOCHS,
+                "training_samples": X_train.shape[0],
+                "training_duration": "fast_training",
+                "avg_epoch_time": "optimized",
+                "sensor_columns": sensor_columns,
+                "model_type": "lstm_autoencoder"
+            }
+            
+            success_output = {
+                "type": "success",
+                "stats": training_stats,
+                "message": "Training completed successfully!"
+            }
+            
+            print(f"SUCCESS:{json.dumps(success_output)}", flush=True)
             
         except Exception as e:
             print(f"Error in threshold calculation: {str(e)}", file=sys.stderr)
