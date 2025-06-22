@@ -280,6 +280,23 @@
                                 <div id="modalProgressBarTrain" class="progress-bar" style="width: 0%;"></div>
                             </div>
                             <p id="modalProgressLabelTrain" class="status-details-text">Initializing...</p>
+                            
+                            <!-- Real-time Python Output Display -->
+                            <div class="python-output-container">
+                                <div class="output-header">
+                                    <h5><i class="fas fa-terminal"></i> Training Log</h5>
+                                    <button type="button" class="btn btn-sm btn-outline" id="clearOutputBtn">
+                                        <i class="fas fa-trash"></i> Clear
+                                    </button>
+                                </div>
+                                <div id="pythonOutputDisplay" class="python-output-display">
+                                    <div class="output-line">
+                                        <span class="timestamp">[System]</span>
+                                        <span class="message">Initializing training environment...</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
                             <button type="button" class="btn btn-primary" id="finishTrainBtn" style="display: none; margin-top: 1rem;">Finish</button>
                         </div>
                     </div>

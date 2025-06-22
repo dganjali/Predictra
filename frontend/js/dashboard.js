@@ -609,8 +609,23 @@ function startTrainPolling(machineId) {
     const progressBar = document.getElementById('modalProgressBarTrain');
     const progressLabel = document.getElementById('modalProgressLabelTrain');
     const finishBtn = document.getElementById('finishTrainBtn');
+    const outputDisplay = document.getElementById('pythonOutputDisplay');
+    const clearOutputBtn = document.getElementById('clearOutputBtn');
 
     if (trainEventSource) trainEventSource.close();
+    
+    // Clear previous output
+    outputDisplay.innerHTML = '';
+    
+    // Add initial messages
+    addOutputLine('[System]', 'Initializing training environment...', 'info');
+    addOutputLine('[System]', 'Starting Python training script...', 'info');
+    
+    // Clear output button functionality
+    clearOutputBtn.addEventListener('click', () => {
+        outputDisplay.innerHTML = '';
+        addOutputLine('[System]', 'Output cleared', 'info');
+    });
     
     const token = localStorage.getItem('token');
     trainEventSource = new EventSource(`/api/dashboard/machine/${machineId}/status?token=${token}`);
@@ -621,25 +636,112 @@ function startTrainPolling(machineId) {
             progressBar.style.width = `${data.progress || 0}%`;
             progressLabel.textContent = data.message || 'Processing...';
 
+            // Add output line for progress updates
+            if (data.message) {
+                addOutputLine('[Progress]', `${data.progress}% - ${data.message}`, 'progress');
+            }
+
+            // Handle real-time detailed messages
+            if (data.detailedMessage) {
+                const timestamp = new Date(data.detailedMessage.timestamp).toLocaleTimeString();
+                addOutputLine(`[${timestamp}]`, data.detailedMessage.message, data.detailedMessage.type);
+            }
+
+            // Display detailed messages if available (for batch updates)
+            if (data.detailedMessages && data.detailedMessages.length > 0) {
+                data.detailedMessages.forEach(msg => {
+                    const timestamp = new Date(msg.timestamp).toLocaleTimeString();
+                    addOutputLine(`[${timestamp}]`, msg.message, msg.type);
+                });
+            }
+
             if (data.status === 'completed' || data.status === 'failed') {
                 trainEventSource.close();
                 trainEventSource = null;
                 finishBtn.style.display = 'inline-block';
-                progressLabel.textContent = data.status === 'completed' ? 'Training successful!' : `Training failed: ${data.message}`;
+                
+                if (data.status === 'completed') {
+                    progressLabel.textContent = 'Training successful!';
+                    addOutputLine('[Success]', 'Training completed successfully!', 'success');
+                    addOutputLine('[System]', 'Model and configuration files saved', 'info');
+                } else {
+                    progressLabel.textContent = `Training failed: ${data.message}`;
+                    addOutputLine('[Error]', `Training failed: ${data.message}`, 'error');
+                }
+                
                 loadDashboardData();
             }
         } else {
             trainEventSource.close();
             progressLabel.textContent = `Error: ${data.message}`;
+            addOutputLine('[Error]', `Connection error: ${data.message}`, 'error');
             finishBtn.style.display = 'inline-block';
         }
     };
 
     trainEventSource.onerror = () => {
         progressLabel.textContent = 'Error: Connection to server lost.';
+        addOutputLine('[Error]', 'Connection to server lost', 'error');
         finishBtn.style.display = 'inline-block';
         if (trainEventSource) trainEventSource.close();
     };
+}
+
+// Helper function to add output lines
+function addOutputLine(timestamp, message, type = 'info') {
+    const outputDisplay = document.getElementById('pythonOutputDisplay');
+    const outputLine = document.createElement('div');
+    outputLine.className = 'output-line';
+    
+    const timestampSpan = document.createElement('span');
+    timestampSpan.className = 'timestamp';
+    timestampSpan.textContent = timestamp;
+    
+    const messageSpan = document.createElement('span');
+    messageSpan.className = `message ${type}`;
+    messageSpan.textContent = message;
+    
+    outputLine.appendChild(timestampSpan);
+    outputLine.appendChild(messageSpan);
+    
+    outputDisplay.appendChild(outputLine);
+    
+    // Auto-scroll to bottom
+    outputDisplay.scrollTop = outputDisplay.scrollHeight;
+    
+    // Add epoch progress if it's an epoch message
+    if (message.includes('Epoch') && message.includes('Loss:')) {
+        addEpochProgress(message);
+    }
+}
+
+// Helper function to add epoch progress
+function addEpochProgress(message) {
+    const outputDisplay = document.getElementById('pythonOutputDisplay');
+    
+    // Extract epoch info from message
+    const epochMatch = message.match(/Epoch (\d+)\/(\d+)/);
+    const lossMatch = message.match(/Loss: ([\d.]+)/);
+    
+    if (epochMatch && lossMatch) {
+        const currentEpoch = parseInt(epochMatch[1]);
+        const totalEpochs = parseInt(epochMatch[2]);
+        const loss = parseFloat(lossMatch[1]);
+        const progress = (currentEpoch / totalEpochs) * 100;
+        
+        const epochProgress = document.createElement('div');
+        epochProgress.className = 'epoch-progress';
+        epochProgress.innerHTML = `
+            <span class="epoch-label">Epoch ${currentEpoch}/${totalEpochs}</span>
+            <div class="epoch-bar">
+                <div class="epoch-fill" style="width: ${progress}%"></div>
+            </div>
+            <span class="epoch-loss">${loss.toFixed(4)}</span>
+        `;
+        
+        outputDisplay.appendChild(epochProgress);
+        outputDisplay.scrollTop = outputDisplay.scrollHeight;
+    }
 }
 
 function showMessage(message, type = 'info') {

@@ -9,6 +9,11 @@ import sys
 import json
 import numpy as np
 import pandas as pd
+
+# Configure TensorFlow to suppress warnings and GPU messages
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 0=all, 1=no INFO, 2=no INFO/WARN, 3=no INFO/WARN/ERROR
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1'  # Disable GPU to avoid CUDA warnings
+
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout
@@ -20,6 +25,9 @@ import logging
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+# Suppress TensorFlow logging
+tf.get_logger().setLevel('ERROR')
 
 class UltraSimpleTrainer:
     """Ultra-simple trainer that just works."""
@@ -51,49 +59,71 @@ class UltraSimpleTrainer:
         print(json.dumps(progress_data), flush=True)
         logger.info(f"Progress {progress}%: {message}")
     
+    def _send_detailed_message(self, message: str, message_type: str = "info"):
+        """Send detailed message for display."""
+        message_data = {
+            "type": "message",
+            "message": message,
+            "message_type": message_type
+        }
+        print(json.dumps(message_data), flush=True)
+        logger.info(f"[{message_type.upper()}] {message}")
+    
     def load_and_preprocess_data(self, csv_path: str, sensor_columns: List[str]) -> Tuple[np.ndarray, List[str]]:
         """Load and preprocess CSV data."""
         self._send_progress(10, "Loading training data...")
+        self._send_detailed_message("Reading CSV file...", "info")
         
         try:
             # Read CSV file
             df = pd.read_csv(csv_path)
-            logger.info(f"Loaded CSV with {len(df)} rows and {len(df.columns)} columns")
+            self._send_detailed_message(f"Loaded CSV with {len(df)} rows and {len(df.columns)} columns", "info")
             
             # Find available sensor columns
             available_columns = [col for col in sensor_columns if col in df.columns]
             if not available_columns:
                 raise ValueError(f"No sensor columns found in CSV. Available: {list(df.columns)}")
             
-            logger.info(f"Using sensor columns: {available_columns}")
+            self._send_detailed_message(f"Using sensor columns: {', '.join(available_columns)}", "info")
             
             # Select only the sensor columns
             df_sensors = df[available_columns].copy()
             
             # Handle missing values
+            missing_before = df_sensors.isnull().sum().sum()
             df_sensors = df_sensors.fillna(method='ffill').fillna(method='bfill')
+            missing_after = df_sensors.isnull().sum().sum()
+            
+            if missing_before > 0:
+                self._send_detailed_message(f"Handled {missing_before - missing_after} missing values", "warning")
+            
             if df_sensors.empty:
                 raise ValueError("No data remaining after handling missing values")
             
             # Limit data size for faster training
+            original_size = len(df_sensors)
             if len(df_sensors) > 2000:
                 df_sensors = df_sensors.sample(n=2000, random_state=42)
-                logger.info(f"Sampled 2000 rows for faster training")
+                self._send_detailed_message(f"Sampled {len(df_sensors)} rows from {original_size} for faster training", "info")
             
             # Scale the data
+            self._send_detailed_message("Scaling data using StandardScaler...", "info")
             self.scaler = StandardScaler()
             scaled_data = self.scaler.fit_transform(df_sensors)
             
             self._send_progress(30, f"Preprocessed {len(scaled_data)} samples")
+            self._send_detailed_message(f"Data preprocessing completed successfully", "success")
             return scaled_data, available_columns
             
         except Exception as e:
+            self._send_detailed_message(f"Error loading data: {str(e)}", "error")
             logger.error(f"Error loading data: {str(e)}")
             raise
     
     def build_simple_model(self, input_shape: int) -> Sequential:
         """Build a very simple neural network."""
         self._send_progress(50, "Building simple neural network...")
+        self._send_detailed_message("Creating autoencoder architecture...", "info")
         
         model = Sequential([
             Dense(64, activation='relu', input_shape=(input_shape,)),
@@ -110,20 +140,26 @@ class UltraSimpleTrainer:
             metrics=['mae']
         )
         
-        logger.info(f"Built simple model with {model.count_params()} parameters")
+        param_count = model.count_params()
+        self._send_detailed_message(f"Built autoencoder with {param_count:,} parameters", "success")
+        logger.info(f"Built simple model with {param_count} parameters")
         return model
     
     def train_model(self, X_train: np.ndarray) -> Dict:
         """Train the model and return training metrics."""
         self._send_progress(60, "Training neural network...")
+        self._send_detailed_message("Starting model training...", "info")
         
         # Build model
         self.model = self.build_simple_model(X_train.shape[1])
         
         # Train model with very simple settings
+        epochs = 3
+        self._send_detailed_message(f"Training for {epochs} epochs with batch size 32", "info")
+        
         history = self.model.fit(
             X_train, X_train,  # Autoencoder: input = target
-            epochs=3,  # Very few epochs
+            epochs=epochs,
             batch_size=32,
             validation_split=0.2,
             verbose=0
@@ -141,11 +177,13 @@ class UltraSimpleTrainer:
         }
         
         self._send_progress(80, f"Training completed. Final loss: {train_loss:.4f}")
+        self._send_detailed_message(f"Training completed! Final loss: {train_loss:.6f}, Validation loss: {val_loss:.6f}", "success")
         return metrics
     
     def calculate_threshold(self, X_train: np.ndarray) -> float:
         """Calculate anomaly threshold based on reconstruction error."""
         self._send_progress(85, "Calculating anomaly threshold...")
+        self._send_detailed_message("Computing reconstruction errors...", "info")
         
         # Get reconstruction errors
         predictions = self.model.predict(X_train, verbose=0)
@@ -166,33 +204,41 @@ class UltraSimpleTrainer:
             'percentile_99': float(np.percentile(mse_errors, 99))
         }
         
+        self._send_detailed_message(f"Anomaly threshold calculated: {threshold:.6f} (95th percentile)", "success")
+        self._send_detailed_message(f"Error statistics - Mean: {stats['mean_error']:.6f}, Std: {stats['std_error']:.6f}", "info")
         logger.info(f"Calculated threshold: {threshold:.6f}")
         return stats
     
     def save_model(self, sensor_columns: List[str], training_stats: Dict):
         """Save the trained model and metadata."""
         self._send_progress(90, "Saving model and metadata...")
+        self._send_detailed_message("Saving trained model...", "info")
         
         # Save model
         model_path = os.path.join(self.model_dir, 'model.h5')
         self.model.save(model_path)
+        self._send_detailed_message("Model saved successfully", "success")
         
         # Save scaler
         scaler_path = os.path.join(self.model_dir, 'scaler.pkl')
         joblib.dump(self.scaler, scaler_path)
+        self._send_detailed_message("Data scaler saved", "success")
         
         # Save column information
         columns_path = os.path.join(self.model_dir, 'columns.json')
         with open(columns_path, 'w') as f:
             json.dump(sensor_columns, f)
+        self._send_detailed_message("Column configuration saved", "success")
         
         # Save training statistics
         stats_path = os.path.join(self.model_dir, 'training_stats.json')
         with open(stats_path, 'w') as f:
             json.dump(training_stats, f)
+        self._send_detailed_message("Training statistics saved", "success")
         
         logger.info(f"Model saved to {self.model_dir}")
         self._send_progress(100, "Training completed successfully!")
+        self._send_detailed_message("All files saved successfully!", "success")
     
     def train(self, csv_path: str, sensor_columns: List[str]) -> Dict:
         """Complete training pipeline."""

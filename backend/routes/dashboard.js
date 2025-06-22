@@ -331,48 +331,106 @@ router.post('/machine/:machineId/train', auth, upload.single('csvFile'), async (
 router.get('/machine/:machineId/status', auth, async (req, res) => {
     const { machineId } = req.params;
 
-    // Set headers for Server-Sent Events
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.flushHeaders();
+    // Set up SSE headers
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*'
+    });
 
-    const sendStatus = async () => {
-        try {
-            const machine = await Machine.findById(machineId);
-            if (!machine) {
-                res.write(`data: ${JSON.stringify({ success: false, message: 'Machine not found.' })}\\n\\n`);
-                return;
-            }
-            const payload = {
-                success: true,
-                status: machine.training_status,
-                progress: machine.training_progress,
-                message: machine.training_message
-            };
-            res.write(`data: ${JSON.stringify(payload)}\\n\\n`);
-            
-            // If training is done, we can close the connection from the server side.
-            if (machine.training_status === 'completed' || machine.training_status === 'failed') {
-                res.end();
-            }
-        } catch (error) {
-            console.error(`Error fetching status for machine ${machineId}:`, error);
-            res.write(`data: ${JSON.stringify({ success: false, message: 'Error fetching status.' })}\\n\\n`);
+    // Send initial status
+    res.write(`data: ${JSON.stringify({
+        success: true,
+        status: 'running',
+        progress: 0,
+        message: 'Starting training...'
+    })}\n\n`);
+
+    // Run Python training script
+    const pythonScript = path.join(__dirname, '../models/simple_trainer.py');
+    const pythonProcess = spawn('python3', [pythonScript, req.user._id, machineId, req.file.path], {
+        env: {
+            ...process.env,
+            SENSOR_COLUMNS: JSON.stringify(parsedColumns)
         }
-    };
+    });
 
-    const dataInterval = setInterval(sendStatus, 2000);
+    let output = '';
 
-    // Send a comment every 15 seconds to keep the connection alive
-    const keepAliveInterval = setInterval(() => {
-        res.write(':keep-alive\\n\\n');
-    }, 15000);
+    pythonProcess.stdout.on('data', (data) => {
+        const chunk = data.toString();
+        output += chunk;
+        
+        // Parse each line for real-time updates
+        const lines = chunk.split('\n');
+        for (const line of lines) {
+            const trimmedLine = line.trim();
+            if (!trimmedLine) continue;
+            
+            try {
+                const parsed = JSON.parse(trimmedLine);
+                
+                if (parsed.type === 'progress') {
+                    // Send progress update
+                    res.write(`data: ${JSON.stringify({
+                        success: true,
+                        status: 'running',
+                        progress: parsed.progress,
+                        message: parsed.message
+                    })}\n\n`);
+                } else if (parsed.type === 'message') {
+                    // Send detailed message
+                    res.write(`data: ${JSON.stringify({
+                        success: true,
+                        status: 'running',
+                        detailedMessage: {
+                            timestamp: new Date().toISOString(),
+                            message: parsed.message,
+                            type: parsed.message_type || 'info'
+                        }
+                    })}\n\n`);
+                }
+            } catch (e) {
+                // Not JSON, ignore - this is normal for log messages
+            }
+        }
+    });
 
-    // Clean up intervals when the client closes the connection
-    req.on('close', () => {
-        clearInterval(dataInterval);
-        clearInterval(keepAliveInterval);
+    pythonProcess.stderr.on('data', (data) => {
+        console.error(`[Python stderr for ${machineId}]: ${data.toString()}`);
+    });
+
+    pythonProcess.on('close', (code) => {
+        console.log(`[Python process for ${machineId} exited with code ${code}`);
+        
+        if (code === 0) {
+            // Training completed successfully
+            res.write(`data: ${JSON.stringify({
+                success: true,
+                status: 'completed',
+                progress: 100,
+                message: 'Training completed successfully!'
+            })}\n\n`);
+        } else {
+            // Training failed
+            res.write(`data: ${JSON.stringify({
+                success: false,
+                status: 'failed',
+                message: `Training failed with exit code ${code}`
+            })}\n\n`);
+        }
+        
+        res.end();
+    });
+
+    pythonProcess.on('error', (error) => {
+        console.error(`[Python process error for ${machineId}]:`, error);
+        res.write(`data: ${JSON.stringify({
+            success: false,
+            status: 'failed',
+            message: `Failed to start training: ${error.message}`
+        })}\n\n`);
         res.end();
     });
 });
@@ -594,26 +652,58 @@ router.post('/machine/:id/predict', auth, async (req, res) => {
             rawOutput += output;
             console.log(`[Python stdout for ${machine._id}]: ${output.trim()}`);
             
-            // Parse JSON messages from Python - handle mixed output more robustly
-            const lines = output.split('\n');
-            for (const line of lines) {
-                const trimmedLine = line.trim();
-                if (!trimmedLine) continue;
+            // Parse mixed output from Python script
+            let progress = 0;
+            let message = 'Initializing...';
+            let status = 'running';
+            let detailedMessages = [];
+            
+            try {
+                // Split output into lines and parse each line
+                const lines = output.split('\n').filter(line => line.trim());
                 
-                try {
-                    const parsed = JSON.parse(trimmedLine);
-                    if (parsed.type === 'progress') {
-                        console.log(`📊 Progress update: ${parsed.progress}% - ${parsed.message}`);
-                        updateProgress(machine._id, parsed.progress, parsed.message);
-                    } else if (parsed.type === 'success') {
-                        console.log('✅ Training completed successfully');
-                    } else if (parsed.type === 'error') {
-                        console.error('❌ Training error:', parsed.message);
+                for (const line of lines) {
+                    try {
+                        const data = JSON.parse(line);
+                        
+                        if (data.type === 'progress') {
+                            progress = data.progress || 0;
+                            message = data.message || 'Processing...';
+                        } else if (data.type === 'message') {
+                            detailedMessages.push({
+                                timestamp: new Date().toISOString(),
+                                message: data.message,
+                                type: data.message_type || 'info'
+                            });
+                        }
+                    } catch (parseError) {
+                        // Skip lines that aren't valid JSON
+                        continue;
                     }
-                } catch (e) {
-                    // Not JSON, ignore - this is normal for log messages
                 }
+                
+                // Check if training completed successfully
+                if (progress >= 100) {
+                    status = 'completed';
+                    message = 'Training completed successfully!';
+                }
+                
+            } catch (parseError) {
+                console.error('Error parsing Python output:', parseError);
+                status = 'failed';
+                message = 'Error parsing training output';
             }
+            
+            // Send final status update
+            res.write(`data: ${JSON.stringify({
+                success: true,
+                status: status,
+                progress: progress,
+                message: message,
+                detailedMessages: detailedMessages
+            })}\n\n`);
+            
+            res.end();
         });
 
         pythonProcess.stderr.on('data', (data) => {
@@ -899,26 +989,58 @@ async function startUltraSimpleTraining(machine, user, csvFilePath) {
             rawOutput += output;
             console.log(`[Python stdout for ${machineId}]: ${output.trim()}`);
             
-            // Parse JSON messages from Python - handle mixed output more robustly
-            const lines = output.split('\n');
-            for (const line of lines) {
-                const trimmedLine = line.trim();
-                if (!trimmedLine) continue;
+            // Parse mixed output from Python script
+            let progress = 0;
+            let message = 'Initializing...';
+            let status = 'running';
+            let detailedMessages = [];
+            
+            try {
+                // Split output into lines and parse each line
+                const lines = output.split('\n').filter(line => line.trim());
                 
-                try {
-                    const parsed = JSON.parse(trimmedLine);
-                    if (parsed.type === 'progress') {
-                        console.log(`📊 Progress update: ${parsed.progress}% - ${parsed.message}`);
-                        updateProgress(machineId, parsed.progress, parsed.message);
-                    } else if (parsed.type === 'success') {
-                        console.log('✅ Training completed successfully');
-                    } else if (parsed.type === 'error') {
-                        console.error('❌ Training error:', parsed.message);
+                for (const line of lines) {
+                    try {
+                        const data = JSON.parse(line);
+                        
+                        if (data.type === 'progress') {
+                            progress = data.progress || 0;
+                            message = data.message || 'Processing...';
+                        } else if (data.type === 'message') {
+                            detailedMessages.push({
+                                timestamp: new Date().toISOString(),
+                                message: data.message,
+                                type: data.message_type || 'info'
+                            });
+                        }
+                    } catch (parseError) {
+                        // Skip lines that aren't valid JSON
+                        continue;
                     }
-                } catch (e) {
-                    // Not JSON, ignore - this is normal for log messages
                 }
+                
+                // Check if training completed successfully
+                if (progress >= 100) {
+                    status = 'completed';
+                    message = 'Training completed successfully!';
+                }
+                
+            } catch (parseError) {
+                console.error('Error parsing Python output:', parseError);
+                status = 'failed';
+                message = 'Error parsing training output';
             }
+            
+            // Send final status update
+            res.write(`data: ${JSON.stringify({
+                success: true,
+                status: status,
+                progress: progress,
+                message: message,
+                detailedMessages: detailedMessages
+            })}\n\n`);
+            
+            res.end();
         });
         
         pythonProcess.stderr.on('data', (data) => {
