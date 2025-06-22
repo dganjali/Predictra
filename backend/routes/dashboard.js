@@ -1298,8 +1298,9 @@ function calculateRUL(riskScore, isAnomaly = false) {
     const BATCH_SIZE = 32;
     const EPOCHS = 10;
     const PATIENCE = 5;
-    const CLASSIFIER_THRESHOLD = 90;
+    const CLASSIFIER_THRESHOLD = 70;
     const RUL_THRESHOLD = 90;
+    const AVERAGE_RUL = 150;
     
     // Convert risk score to a percentage (0-100)
     const riskPercentage = Math.min(100, Math.max(0, riskScore * 100));
@@ -1307,14 +1308,14 @@ function calculateRUL(riskScore, isAnomaly = false) {
     // Calculate RUL based on risk percentage and thresholds
     let rulEstimate;
     if (riskPercentage >= RUL_THRESHOLD) {
-        // High risk - low RUL (0-30 days)
-        rulEstimate = Math.max(0, 30 - (riskPercentage - RUL_THRESHOLD) * 0.5);
+        // High risk - low RUL (0-90 days) - unhealthy
+        rulEstimate = Math.max(0, 90 - (riskPercentage - RUL_THRESHOLD) * 0.9);
     } else if (riskPercentage >= CLASSIFIER_THRESHOLD) {
-        // Medium risk - moderate RUL (30-90 days)
-        rulEstimate = 30 + (RUL_THRESHOLD - riskPercentage) * 2;
+        // Medium risk - moderate RUL (90-150 days) - below average
+        rulEstimate = 90 + (RUL_THRESHOLD - riskPercentage) * 1.5;
     } else {
-        // Low risk - high RUL (90-365 days)
-        rulEstimate = 90 + (CLASSIFIER_THRESHOLD - riskPercentage) * 3;
+        // Low risk - high RUL (150-365 days) - healthy
+        rulEstimate = AVERAGE_RUL + (CLASSIFIER_THRESHOLD - riskPercentage) * 4.3;
     }
     
     // Ensure RUL is within reasonable bounds (0-365 days)
@@ -1330,7 +1331,8 @@ function calculateRUL(riskScore, isAnomaly = false) {
             EPOCHS,
             PATIENCE,
             CLASSIFIER_THRESHOLD,
-            RUL_THRESHOLD
+            RUL_THRESHOLD,
+            AVERAGE_RUL
         }
     };
 }
@@ -1344,6 +1346,33 @@ function calculateHealthScore(riskScore, isAnomaly = false) {
     } else {
         // If normal, health score is between 60-100
         healthScore = Math.min(100, 100 - (riskScore * 50));
+    }
+    
+    return Math.round(healthScore);
+}
+
+// Helper function to calculate health score using machine-specific parameters
+function calculateHealthScoreWithMachineParams(riskScore, isAnomaly = false, modelParams) {
+    const threshold = modelParams.threshold || 1.0;
+    const normalizedRisk = Math.min(1.0, riskScore / threshold);
+    
+    let healthScore;
+    if (isAnomaly) {
+        // If anomaly detected, health score is between 0-40
+        healthScore = Math.max(0, 40 - (normalizedRisk * 100));
+    } else {
+        // If normal, health score is between 60-100
+        // Adjusted to reflect new RUL thresholds: 150 is normal, <90 is unhealthy
+        if (normalizedRisk >= 0.9) {
+            // High risk (RUL < 90 days) - health score 0-40
+            healthScore = Math.max(0, 40 - (normalizedRisk - 0.9) * 400);
+        } else if (normalizedRisk >= 0.7) {
+            // Medium risk (RUL 90-150 days) - health score 40-80
+            healthScore = 40 + (0.9 - normalizedRisk) * 200;
+        } else {
+            // Low risk (RUL > 150 days) - health score 80-100
+            healthScore = 80 + (0.7 - normalizedRisk) * 100;
+        }
     }
     
     return Math.round(healthScore);
@@ -1803,6 +1832,9 @@ function calculateRULWithMachineParams(riskScore, isAnomaly = false, modelParams
     const threshold = modelParams.threshold || 1.0;
     const meanError = modelParams.mean_error || 0.5;
     const stdError = modelParams.std_error || 0.3;
+    const AVERAGE_RUL = 150;
+    const RUL_THRESHOLD = 90;
+    const CLASSIFIER_THRESHOLD = 70;
     
     // Normalize risk score based on machine's threshold
     const normalizedRisk = Math.min(1.0, riskScore / threshold);
@@ -1812,15 +1844,15 @@ function calculateRULWithMachineParams(riskScore, isAnomaly = false, modelParams
     
     // Calculate RUL based on risk percentage and machine parameters
     let rulEstimate;
-    if (riskPercentage >= 90) {
-        // High risk - low RUL (0-30 days)
-        rulEstimate = Math.max(0, 30 - (riskPercentage - 90) * 0.5);
-    } else if (riskPercentage >= 70) {
-        // Medium risk - moderate RUL (30-90 days)
-        rulEstimate = 30 + (90 - riskPercentage) * 2;
+    if (riskPercentage >= RUL_THRESHOLD) {
+        // High risk - low RUL (0-90 days) - unhealthy
+        rulEstimate = Math.max(0, 90 - (riskPercentage - RUL_THRESHOLD) * 0.9);
+    } else if (riskPercentage >= CLASSIFIER_THRESHOLD) {
+        // Medium risk - moderate RUL (90-150 days) - below average
+        rulEstimate = 90 + (RUL_THRESHOLD - riskPercentage) * 1.5;
     } else {
-        // Low risk - high RUL (90-365 days)
-        rulEstimate = 90 + (70 - riskPercentage) * 3;
+        // Low risk - high RUL (150-365 days) - healthy
+        rulEstimate = AVERAGE_RUL + (CLASSIFIER_THRESHOLD - riskPercentage) * 4.3;
     }
     
     // Ensure RUL is within reasonable bounds (0-365 days)
@@ -1834,29 +1866,15 @@ function calculateRULWithMachineParams(riskScore, isAnomaly = false, modelParams
             mean_error: meanError,
             std_error: stdError,
             risk_score: riskScore,
-            normalized_risk: normalizedRisk
+            normalized_risk: normalizedRisk,
+            average_rul: AVERAGE_RUL,
+            rul_threshold: RUL_THRESHOLD
         }
     };
 }
 
-// Helper function to calculate health score using machine-specific parameters
-function calculateHealthScoreWithMachineParams(riskScore, isAnomaly = false, modelParams) {
-    const threshold = modelParams.threshold || 1.0;
-    const normalizedRisk = Math.min(1.0, riskScore / threshold);
-    
-    let healthScore;
-    if (isAnomaly) {
-        // If anomaly detected, health score is between 0-40
-        healthScore = Math.max(0, 40 - (normalizedRisk * 100));
-    } else {
-        // If normal, health score is between 60-100
-        healthScore = Math.min(100, 100 - (normalizedRisk * 50));
-    }
-    
-    return Math.round(healthScore);
-}
-
 module.exports = router;
+module.exports.calculateRUL = calculateRUL;
 module.exports.calculateRULWithMachineParams = calculateRULWithMachineParams;
 module.exports.calculateHealthScoreWithMachineParams = calculateHealthScoreWithMachineParams;
 module.exports.determineMachineStatus = determineMachineStatus;
