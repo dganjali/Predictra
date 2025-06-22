@@ -6,6 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const { spawn } = require('child_process');
+const readline = require('readline');
 
 const router = express.Router();
 
@@ -727,7 +728,7 @@ router.delete('/machine/:id', auth, async (req, res) => {
 });
 
 // This endpoint receives a CSV, reads the header row, and returns the column names.
-router.post('/get-csv-headers', (req, res) => {
+router.post('/get-csv-headers', upload.single('csvFile'), (req, res) => {
     if (!req.file) {
         return res.status(400).json({ success: false, message: 'No file uploaded.' });
     }
@@ -877,24 +878,75 @@ async function trainModelWithCSV(machine, user, csvFilePath) {
             training_message: 'Reading and preprocessing training data...'
         });
         
-        // Create a smaller sample of the CSV for faster training
+        // Use streaming to read only the first 3MB of CSV data
         const Papa = require('papaparse');
-        const csvContent = fs.readFileSync(csvFilePath, 'utf8');
-        const parsedData = Papa.parse(csvContent, { header: true, skipEmptyLines: true });
+        const readline = require('readline');
         
-        // Take only first 500 rows for faster training
-        const sampleSize = Math.min(500, parsedData.data.length);
-        const sampleData = parsedData.data.slice(0, sampleSize);
+        // Get file size
+        const stats = fs.statSync(csvFilePath);
+        const fileSizeInMB = stats.size / (1024 * 1024);
+        console.log(`📊 CSV file size: ${fileSizeInMB.toFixed(2)} MB`);
         
-        console.log(`📊 Using ${sampleSize} rows from ${parsedData.data.length} total rows`);
+        // Read only first 3MB of data
+        const maxBytesToRead = 3 * 1024 * 1024; // 3MB
+        const readStream = fs.createReadStream(csvFilePath, { 
+            encoding: 'utf8',
+            highWaterMark: 64 * 1024 // 64KB chunks
+        });
         
-        // Create sampled CSV file
+        let bytesRead = 0;
+        let csvContent = '';
+        let headers = null;
+        let dataRows = [];
+        
+        // Read file in chunks until we reach 3MB or end of file
+        for await (const chunk of readStream) {
+            bytesRead += chunk.length;
+            csvContent += chunk;
+            
+            // Stop reading if we've reached 3MB
+            if (bytesRead >= maxBytesToRead) {
+                console.log(`📊 Read ${(bytesRead / (1024 * 1024)).toFixed(2)} MB of data (limited to first 3MB)`);
+                break;
+            }
+        }
+        
+        readStream.destroy();
+        
+        // Parse the CSV content
+        const parseResult = Papa.parse(csvContent, {
+            header: true,
+            skipEmptyLines: true
+        });
+        
+        if (parseResult.errors.length > 0) {
+            console.warn('CSV parsing warnings:', parseResult.errors);
+        }
+        
+        headers = parseResult.meta.fields;
+        dataRows = parseResult.data;
+        
+        console.log(`📋 CSV headers: ${headers.length} columns`);
+        console.log(`📊 Processed ${dataRows.length} rows from first 3MB of data`);
+        
+        // Force garbage collection after processing
+        forceGarbageCollection();
+        
+        // Create sampled CSV file with the processed data
         const sampleCsvPath = csvFilePath.replace('.csv', '_sample.csv');
         const sampleCsvContent = Papa.unparse({
-            fields: parsedData.meta.fields,
-            data: sampleData
+            fields: headers,
+            data: dataRows
         });
+        
+        // Write sample CSV
         fs.writeFileSync(sampleCsvPath, sampleCsvContent);
+        
+        // Clear large variables from memory
+        csvContent = null;
+        dataRows = null;
+        headers = null;
+        forceGarbageCollection();
         
         // Update progress: Starting Python training
         await Machine.findByIdAndUpdate(machineId, {
@@ -1003,7 +1055,8 @@ async function trainModelWithCSV(machine, user, csvFilePath) {
                         percentile_99: trainingResult.percentile_99,
                         source: 'custom_trained_model',
                         trained_columns: selectedColumns,
-                        training_samples: sampleSize,
+                        training_samples: dataRows.length,
+                        total_file_lines: dataRows.length,
                         training_date: new Date().toISOString()
                     };
                     
@@ -1012,13 +1065,13 @@ async function trainModelWithCSV(machine, user, csvFilePath) {
                         training_progress: 100,
                         model_params: modelParams,
                         modelStatus: 'trained',
-                        training_message: `Training completed successfully! Used ${sampleSize} samples.`,
+                        training_message: `Training completed successfully! Used ${dataRows.length} samples from ${dataRows.length} total lines.`,
                         lastTrained: new Date()
                     });
                     
                     console.log(`✅ Training completed successfully for machine ${machineId}`);
                     console.log(`📊 Model threshold: ${trainingResult.threshold}`);
-                    console.log(`🎯 Training samples: ${sampleSize}`);
+                    console.log(`🎯 Training samples: ${dataRows.length} from ${dataRows.length} total lines`);
                 } else {
                     throw new Error('Training completed but no valid results returned');
                 }
@@ -1053,6 +1106,14 @@ async function updateProgress(machineId, progress, message) {
         console.log(`📈 Progress ${progress}%: ${message}`);
     } catch (error) {
         console.error('Error updating progress:', error);
+    }
+}
+
+// Helper function to force garbage collection if available
+function forceGarbageCollection() {
+    if (global.gc) {
+        global.gc();
+        console.log('🧹 Forced garbage collection');
     }
 }
 

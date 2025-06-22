@@ -447,21 +447,58 @@ function initTrainMachineModal() {
     csvFileInput.addEventListener('change', (event) => {
         const file = event.target.files[0];
         if (!file) return;
-        Papa.parse(file, {
-            header: true, preview: 1, skipEmptyLines: true,
+        
+        // Check file size and inform about 3MB limit
+        const fileSizeInMB = file.size / (1024 * 1024);
+        console.log(`📁 File selected: ${file.name} (${fileSizeInMB.toFixed(2)} MB)`);
+        
+        if (fileSizeInMB > 3) {
+            showMessage('Large file detected. Only the first 3MB of data will be used for training.', 'info');
+        }
+        
+        // Use Papa Parse with streaming for large files
+        const config = {
+            header: true, 
+            preview: 1, 
+            skipEmptyLines: true,
+            chunk: function(results, parser) {
+                // Process only the first chunk to get headers
+                if (results.meta.fields) {
+                    originalCsvHeaders = results.meta.fields;
+                    const container = document.getElementById('columnCheckboxesTrain');
+                    container.innerHTML = '';
+                    const displayHeaders = originalCsvHeaders.filter(h => !idTsSynonyms.includes(h.toLowerCase()));
+                    displayHeaders.forEach(header => {
+                        const cbDiv = document.createElement('div');
+                        cbDiv.className = 'checkbox-item';
+                        cbDiv.innerHTML = `<input type="checkbox" id="train-col-${header}" name="columns" value="${header}"><label for="train-col-${header}">${header}</label>`;
+                        container.appendChild(cbDiv);
+                    });
+                    parser.abort(); // Stop parsing after getting headers
+                }
+            },
             complete: (results) => {
-                originalCsvHeaders = results.meta.fields;
-                const container = document.getElementById('columnCheckboxesTrain');
-                container.innerHTML = '';
-                const displayHeaders = originalCsvHeaders.filter(h => !idTsSynonyms.includes(h.toLowerCase()));
-                displayHeaders.forEach(header => {
-                    const cbDiv = document.createElement('div');
-                    cbDiv.className = 'checkbox-item';
-                    cbDiv.innerHTML = `<input type="checkbox" id="train-col-${header}" name="columns" value="${header}"><label for="train-col-${header}">${header}</label>`;
-                    container.appendChild(cbDiv);
-                });
+                // Fallback for smaller files
+                if (!originalCsvHeaders.length && results.meta.fields) {
+                    originalCsvHeaders = results.meta.fields;
+                    const container = document.getElementById('columnCheckboxesTrain');
+                    container.innerHTML = '';
+                    const displayHeaders = originalCsvHeaders.filter(h => !idTsSynonyms.includes(h.toLowerCase()));
+                    displayHeaders.forEach(header => {
+                        const cbDiv = document.createElement('div');
+                        cbDiv.className = 'checkbox-item';
+                        cbDiv.innerHTML = `<input type="checkbox" id="train-col-${header}" name="columns" value="${header}"><label for="train-col-${header}">${header}</label>`;
+                        container.appendChild(cbDiv);
+                    });
+                }
+            },
+            error: (error) => {
+                console.error('CSV parsing error:', error);
+                showMessage('Error reading CSV file. Please check the file format.', 'error');
             }
-        });
+        };
+        
+        Papa.parse(file, config);
     });
     
     function generateSensorConfigUI() {
