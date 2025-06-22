@@ -48,6 +48,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Check if user is authenticated and update navigation
     checkAuthStatus();
+
+    // Initialize typewriter
+    initTypewriter();
 });
 
 // Check authentication status and update UI accordingly
@@ -251,4 +254,57 @@ window.authUtils = {
     formatDate,
     validateEmail,
     validatePassword
-}; 
+};
+
+function initTypewriter() {
+    const container = document.getElementById('typewriter-container');
+    if (!container) return;
+
+    const textElement = container.querySelector('.typewriter-text');
+    const cursorElement = container.querySelector('.cursor');
+
+    const lines = [
+        "Analyzing sensor data stream...",
+        "Real-time anomaly detection in progress...",
+        "Calculating Remaining Useful Lifetime (RUL)...",
+        "Generating predictive maintenance alerts...",
+        "Bayesian inference models updating...",
+        "System operating at 99.8% efficiency.",
+        "Monitoring pump_AX12... Status: Healthy",
+        "Monitoring motor_B45... Status: Warning"
+    ];
+
+    let lineIndex = 0;
+    let charIndex = 0;
+    let isDeleting = false;
+
+    function type() {
+        const currentLine = lines[lineIndex];
+        
+        if (isDeleting) {
+            // Deleting text
+            textElement.textContent = currentLine.substring(0, charIndex - 1);
+            charIndex--;
+        } else {
+            // Typing text
+            textElement.textContent = currentLine.substring(0, charIndex + 1);
+            charIndex++;
+        }
+
+        let typeSpeed = isDeleting ? 50 : 100;
+
+        if (!isDeleting && charIndex === currentLine.length) {
+            // Pause at end of line
+            typeSpeed = 2000;
+            isDeleting = true;
+        } else if (isDeleting && charIndex === 0) {
+            isDeleting = false;
+            lineIndex = (lineIndex + 1) % lines.length;
+            typeSpeed = 500;
+        }
+        
+        setTimeout(type, typeSpeed);
+    }
+
+    type();
+} 
