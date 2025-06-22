@@ -311,7 +311,7 @@ router.post('/machine/:machineId/train', auth, upload.single('csvFile'), async (
         await machine.save();
 
         // Start training process in the background
-        startSimpleTraining(machine, user, req.file.path);
+        startUltraSimpleTraining(machine, user, req.file.path);
 
         res.status(200).json({
             success: true,
@@ -574,18 +574,46 @@ router.post('/machine/:id/predict', auth, async (req, res) => {
         // Write the ordered array to the file, not the original object
         fs.writeFileSync(sequenceFilePath, JSON.stringify(orderedSensorData));
 
-        const pythonScriptPath = path.join(__dirname, '..', 'models', 'anomaly.py');
+        // Start Python prediction process for CSV
+        const pythonScriptPath = path.join(__dirname, '..', 'models', 'simple_predictor.py');
+        console.log(`🚀 Starting CSV prediction: python3 ${pythonScriptPath} test_user test_machine ${sequenceFilePath}`);
+        
         const pythonProcess = spawn('python3', [
             pythonScriptPath, 
-            'predict',
             'test_user', // Use test_user for pre-trained model
             'test_machine', // Use test_machine for pre-trained model
             sequenceFilePath
-        ]);
+        ], {
+            stdio: ['pipe', 'pipe', 'pipe'],
+            env: { ...process.env, PYTHONUNBUFFERED: '1' }
+        });
 
         let rawOutput = '';
         pythonProcess.stdout.on('data', (data) => {
-            rawOutput += data.toString();
+            const output = data.toString();
+            rawOutput += output;
+            console.log(`[Python stdout for ${machine._id}]: ${output.trim()}`);
+            
+            // Parse JSON messages from Python - handle mixed output more robustly
+            const lines = output.split('\n');
+            for (const line of lines) {
+                const trimmedLine = line.trim();
+                if (!trimmedLine) continue;
+                
+                try {
+                    const parsed = JSON.parse(trimmedLine);
+                    if (parsed.type === 'progress') {
+                        console.log(`📊 Progress update: ${parsed.progress}% - ${parsed.message}`);
+                        updateProgress(machine._id, parsed.progress, parsed.message);
+                    } else if (parsed.type === 'success') {
+                        console.log('✅ Training completed successfully');
+                    } else if (parsed.type === 'error') {
+                        console.error('❌ Training error:', parsed.message);
+                    }
+                } catch (e) {
+                    // Not JSON, ignore - this is normal for log messages
+                }
+            }
         });
 
         pythonProcess.stderr.on('data', (data) => {
@@ -817,18 +845,18 @@ function getModelPaths(userId, machineId) {
     };
 }
 
-async function startSimpleTraining(machine, user, csvFilePath) {
+async function startUltraSimpleTraining(machine, user, csvFilePath) {
     const machineId = machine._id.toString();
     const userId = user._id.toString();
     
     try {
-        console.log(`🏋️ Starting simple training for machine ${machineId} using CSV: ${csvFilePath}`);
+        console.log(`🏋️ Starting ultra-simple training for machine ${machineId} using CSV: ${csvFilePath}`);
         
         // Update progress: Starting
         await Machine.findByIdAndUpdate(machineId, {
             training_status: 'in_progress',
             training_progress: 5,
-            training_message: 'Initializing training environment...'
+            training_message: 'Initializing ultra-simple training...'
         });
         
         // Validate CSV file exists
@@ -837,7 +865,7 @@ async function startSimpleTraining(machine, user, csvFilePath) {
         }
         
         // Prepare training parameters
-        const pythonScriptPath = path.join(__dirname, '..', 'models', 'trainer.py');
+        const pythonScriptPath = path.join(__dirname, '..', 'models', 'simple_trainer.py');
         const selectedColumns = machine.training_columns || [];
         
         console.log(`🎯 Training with columns:`, selectedColumns);
@@ -871,12 +899,16 @@ async function startSimpleTraining(machine, user, csvFilePath) {
             rawOutput += output;
             console.log(`[Python stdout for ${machineId}]: ${output.trim()}`);
             
-            // Parse JSON messages from Python
+            // Parse JSON messages from Python - handle mixed output more robustly
             const lines = output.split('\n');
             for (const line of lines) {
+                const trimmedLine = line.trim();
+                if (!trimmedLine) continue;
+                
                 try {
-                    const parsed = JSON.parse(line.trim());
+                    const parsed = JSON.parse(trimmedLine);
                     if (parsed.type === 'progress') {
+                        console.log(`📊 Progress update: ${parsed.progress}% - ${parsed.message}`);
                         updateProgress(machineId, parsed.progress, parsed.message);
                     } else if (parsed.type === 'success') {
                         console.log('✅ Training completed successfully');
@@ -884,7 +916,7 @@ async function startSimpleTraining(machine, user, csvFilePath) {
                         console.error('❌ Training error:', parsed.message);
                     }
                 } catch (e) {
-                    // Not JSON, ignore
+                    // Not JSON, ignore - this is normal for log messages
                 }
             }
         });
@@ -921,14 +953,20 @@ async function startSimpleTraining(machine, user, csvFilePath) {
             }
             
             try {
-                // Parse training results from output
+                // Parse training results from output - be more robust
                 let trainingResult = null;
                 const lines = rawOutput.split('\n');
+                
+                // Look for the success message with stats
                 for (const line of lines) {
+                    const trimmedLine = line.trim();
+                    if (!trimmedLine) continue;
+                    
                     try {
-                        const parsed = JSON.parse(line.trim());
+                        const parsed = JSON.parse(trimmedLine);
                         if (parsed.type === 'success' && parsed.stats) {
                             trainingResult = parsed.stats;
+                            console.log('✅ Found training results:', trainingResult);
                             break;
                         }
                     } catch (e) {
@@ -951,31 +989,34 @@ async function startSimpleTraining(machine, user, csvFilePath) {
                         final_val_loss: trainingResult.final_val_loss,
                         epochs_trained: trainingResult.epochs_trained,
                         training_samples: trainingResult.training_samples,
-                        source: 'simple_trained_model',
+                        source: 'ultra_simple_trained_model',
                         trained_columns: trainingResult.sensor_columns,
-                        sequence_length: trainingResult.sequence_length,
                         model_type: trainingResult.model_type,
                         training_date: new Date().toISOString()
                     };
+                    
+                    console.log('📊 Model params to save:', modelParams);
                     
                     await Machine.findByIdAndUpdate(machineId, {
                         training_status: 'completed',
                         training_progress: 100,
                         model_params: modelParams,
                         modelStatus: 'trained',
-                        training_message: `Training completed successfully! Used ${trainingResult.training_samples} samples.`,
+                        training_message: `Ultra-simple training completed successfully! Used ${trainingResult.training_samples} samples.`,
                         lastTrained: new Date()
                     });
                     
-                    console.log(`✅ Training completed successfully for machine ${machineId}`);
+                    console.log(`✅ Ultra-simple training completed successfully for machine ${machineId}`);
                     console.log(`📊 Model threshold: ${trainingResult.threshold}`);
                     console.log(`🎯 Training samples: ${trainingResult.training_samples}`);
                 } else {
+                    console.error('❌ No training results found in output. Raw output:', rawOutput);
                     throw new Error('Training completed but no valid results returned');
                 }
                 
             } catch (error) {
                 console.error(`❌ Error processing training results for machine ${machineId}:`, error);
+                console.error('Raw output was:', rawOutput);
                 await Machine.findByIdAndUpdate(machineId, {
                     training_status: 'failed',
                     training_progress: 0,
