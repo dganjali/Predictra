@@ -83,8 +83,11 @@ function setUserName(user) {
 }
 
 function initDashboard() {
+    console.log('🚀 Starting dashboard initialization...');
+    
     // Initialize logout functionality
     initLogout();
+    console.log('✅ Logout initialized');
     
     // Add event listener for the refresh button
     const refreshBtn = document.getElementById('refreshBtn');
@@ -93,22 +96,31 @@ function initDashboard() {
             showMessage('Refreshing dashboard data...', 'info');
             loadDashboardData();
         });
+        console.log('✅ Refresh button initialized');
+    } else {
+        console.warn('⚠️ Refresh button not found');
     }
     
     // Initialize dashboard navigation
     initDashboardNav();
+    console.log('✅ Dashboard navigation initialized');
     
     // Initialize hamburger menu
     initHamburgerMenu();
+    console.log('✅ Hamburger menu initialized');
     
     // Initialize machine management
     initMachineManagement();
+    console.log('✅ Machine management initialized');
     
     // Initialize confirmation modal
     initConfirmationModal();
+    console.log('✅ Confirmation modal initialized');
     
     // Load dashboard data (placeholder for future implementation)
+    console.log('🔄 Loading dashboard data...');
     loadDashboardData();
+    console.log('✅ Dashboard initialization complete');
 }
 
 function initLogout() {
@@ -209,22 +221,24 @@ function initMachineManagement() {
         });
     }
 
-    // Initialize prediction modal
+    // Initialize prediction modal - only set up the modal structure, not the form handlers
     const predictionModal = document.getElementById('predictionModal');
     const closePredictionBtn = document.getElementById('closePredictionModal');
     const cancelPredictionBtn = document.getElementById('cancelPrediction');
-    const predictionForm = document.getElementById('predictionForm');
 
     if (predictionModal) {
         const closeModalFunc = () => predictionModal.classList.remove('show');
-        closePredictionBtn.addEventListener('click', closeModalFunc);
-        cancelPredictionBtn.addEventListener('click', closeModalFunc);
+        if (closePredictionBtn) {
+            closePredictionBtn.addEventListener('click', closeModalFunc);
+        }
+        if (cancelPredictionBtn) {
+            cancelPredictionBtn.addEventListener('click', closeModalFunc);
+        }
         predictionModal.addEventListener('click', (e) => {
             if (e.target === predictionModal) {
                 closeModalFunc();
             }
         });
-        predictionForm.addEventListener('submit', handlePrediction);
     }
 
     // Initialize the new training modal
@@ -651,26 +665,47 @@ function showMessage(message, type = 'info') {
 
 async function loadDashboardData() {
     try {
+        console.log('🔄 Fetching dashboard data...');
         const token = localStorage.getItem('token');
+        
+        if (!token) {
+            console.error('❌ No token found in localStorage');
+            showMessage('Authentication token not found. Please log in again.', 'error');
+            return;
+        }
+        
+        console.log('📡 Making API request to /api/dashboard/data...');
         const response = await fetch('/api/dashboard/data', {
             headers: { 'Authorization': `Bearer ${token}` }
         });
+        
+        console.log('📥 Response received:', response.status, response.statusText);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
         const data = await response.json();
+        console.log('📊 Dashboard data received:', data);
 
         if (data.success) {
             allMachines = data.data.machines || [];
+            console.log(`✅ Loaded ${allMachines.length} machines`);
             displayDashboardData(data.data);
+            
             // After displaying, check for any machines that are in training
             allMachines.forEach(machine => {
                 if (machine.training_status === 'pending' || machine.training_status === 'in_progress') {
+                    console.log(`🔄 Starting training status polling for machine ${machine._id}`);
                     startTrainingStatusPolling(machine._id);
                 }
             });
         } else {
+            console.error('❌ API returned error:', data.message);
             showMessage(data.message, 'error');
         }
     } catch (error) {
-        console.error('Error loading dashboard data:', error);
+        console.error('❌ Error loading dashboard data:', error);
         showMessage('Failed to load dashboard data. Please try again.', 'error');
     }
 }

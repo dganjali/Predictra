@@ -73,6 +73,10 @@ app.get('/about', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/about.html'));
 });
 
+app.get('/test', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/test.html'));
+});
+
 // Serve static files from frontend (CSS, JS, etc.)
 app.use(express.static(path.join(__dirname, '../frontend')));
 

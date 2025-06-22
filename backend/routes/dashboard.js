@@ -311,7 +311,7 @@ router.post('/machine/:machineId/train', auth, upload.single('csvFile'), async (
         await machine.save();
 
         // Start training process in the background
-        trainModelWithCSV(machine, user, req.file.path);
+        startSimpleTraining(machine, user, req.file.path);
 
         res.status(200).json({
             success: true,
@@ -817,12 +817,12 @@ function getModelPaths(userId, machineId) {
     };
 }
 
-async function trainModelWithCSV(machine, user, csvFilePath) {
+async function startSimpleTraining(machine, user, csvFilePath) {
     const machineId = machine._id.toString();
     const userId = user._id.toString();
     
     try {
-        console.log(`🏋️ Starting fast training for machine ${machineId} using CSV: ${csvFilePath}`);
+        console.log(`🏋️ Starting simple training for machine ${machineId} using CSV: ${csvFilePath}`);
         
         // Update progress: Starting
         await Machine.findByIdAndUpdate(machineId, {
@@ -836,118 +836,33 @@ async function trainModelWithCSV(machine, user, csvFilePath) {
             throw new Error('Training CSV file not found');
         }
         
-        // Update progress: Reading data
-        await Machine.findByIdAndUpdate(machineId, {
-            training_progress: 15,
-            training_message: 'Reading and preprocessing training data...'
-        });
-        
-        // Use streaming to read only the first 1MB of CSV data for faster training
-        const Papa = require('papaparse');
-        
-        // Get file size
-        const stats = fs.statSync(csvFilePath);
-        const fileSizeInMB = stats.size / (1024 * 1024);
-        console.log(`📊 CSV file size: ${fileSizeInMB.toFixed(2)} MB`);
-        
-        // Read only first 1MB of data for faster training
-        const maxBytesToRead = 1 * 1024 * 1024; // 1MB
-        const readStream = fs.createReadStream(csvFilePath, { 
-            encoding: 'utf8',
-            highWaterMark: 64 * 1024 // 64KB chunks
-        });
-        
-        let bytesRead = 0;
-        let csvContent = '';
-        let headers = null;
-        let dataRows = [];
-        
-        // Read file in chunks until we reach 1MB or end of file
-        for await (const chunk of readStream) {
-            bytesRead += chunk.length;
-            csvContent += chunk;
-            
-            // Stop reading if we've reached 1MB
-            if (bytesRead >= maxBytesToRead) {
-                console.log(`📊 Read ${(bytesRead / (1024 * 1024)).toFixed(2)} MB of data (limited to first 1MB for fast training)`);
-                break;
-            }
-        }
-        
-        readStream.destroy();
-        
-        // Parse the CSV content
-        const parseResult = Papa.parse(csvContent, {
-            header: true,
-            skipEmptyLines: true
-        });
-        
-        if (parseResult.errors.length > 0) {
-            console.warn('CSV parsing warnings:', parseResult.errors);
-        }
-        
-        headers = parseResult.meta.fields;
-        dataRows = parseResult.data;
-        
-        console.log(`📋 CSV headers: ${headers.length} columns`);
-        console.log(`📊 Processed ${dataRows.length} rows from first 1MB of data`);
-        
-        // Force garbage collection after processing
-        forceGarbageCollection();
-        
-        // Create sampled CSV file with the processed data
-        const sampleCsvPath = csvFilePath.replace('.csv', '_sample.csv');
-        const sampleCsvContent = Papa.unparse({
-            fields: headers,
-            data: dataRows
-        });
-        
-        // Write sample CSV
-        fs.writeFileSync(sampleCsvPath, sampleCsvContent);
-        
-        // Clear large variables from memory
-        csvContent = null;
-        dataRows = null;
-        headers = null;
-        forceGarbageCollection();
-        
-        // Update progress: Starting Python training
-        await Machine.findByIdAndUpdate(machineId, {
-            training_progress: 25,
-            training_message: 'Starting fast ML model training...'
-        });
-        
         // Prepare training parameters
-        const pythonScriptPath = path.join(__dirname, '..', 'models', 'anomaly.py');
+        const pythonScriptPath = path.join(__dirname, '..', 'models', 'trainer.py');
         const selectedColumns = machine.training_columns || [];
         
         console.log(`🎯 Training with columns:`, selectedColumns);
         
-        // Create temporary columns file
-        const tempDir = path.join(__dirname, '..', 'uploads', 'temp');
-        if (!fs.existsSync(tempDir)) {
-            fs.mkdirSync(tempDir, { recursive: true });
-        }
-        const columnsFilePath = path.join(tempDir, `columns_${machineId}_${Date.now()}.json`);
-        fs.writeFileSync(columnsFilePath, JSON.stringify(selectedColumns));
+        // Set environment variables for Python script
+        const env = { 
+            ...process.env, 
+            PYTHONUNBUFFERED: '1',
+            SENSOR_COLUMNS: JSON.stringify(selectedColumns)
+        };
         
-        // Start Python training process with fast training mode
-        console.log(`🚀 Starting Python process: python3 ${pythonScriptPath} train_fast ${userId} ${machineId} ${sampleCsvPath} ${columnsFilePath}`);
+        // Start Python training process
+        console.log(`🚀 Starting Python process: python3 ${pythonScriptPath} ${userId} ${machineId} ${csvFilePath}`);
         
         const pythonProcess = spawn('python3', [
             pythonScriptPath,
-            'train_fast',  // New fast training mode
             userId,
             machineId,
-            sampleCsvPath,
-            columnsFilePath
+            csvFilePath
         ], {
             stdio: ['pipe', 'pipe', 'pipe'],
-            env: { ...process.env, PYTHONUNBUFFERED: '1' }
+            env: env
         });
         
         let rawOutput = '';
-        let lastProgress = 25;
         let processStartTime = Date.now();
         
         // Monitor Python process output for progress updates
@@ -956,21 +871,21 @@ async function trainModelWithCSV(machine, user, csvFilePath) {
             rawOutput += output;
             console.log(`[Python stdout for ${machineId}]: ${output.trim()}`);
             
-            // Parse progress from Python output
-            if (output.includes('Starting fast training')) {
-                lastProgress = 40;
-                updateProgress(machineId, lastProgress, 'Fast training neural network...');
-            } else if (output.includes('Epoch')) {
-                lastProgress = Math.min(80, lastProgress + 10); // Faster progress updates
-                const epochMatch = output.match(/Epoch (\d+)/);
-                const epoch = epochMatch ? epochMatch[1] : '?';
-                updateProgress(machineId, lastProgress, `Fast training epoch ${epoch}...`);
-            } else if (output.includes('Saving model')) {
-                lastProgress = 90;
-                updateProgress(machineId, lastProgress, 'Saving trained model...');
-            } else if (output.includes('Training completed')) {
-                lastProgress = 95;
-                updateProgress(machineId, lastProgress, 'Finalizing training...');
+            // Parse JSON messages from Python
+            const lines = output.split('\n');
+            for (const line of lines) {
+                try {
+                    const parsed = JSON.parse(line.trim());
+                    if (parsed.type === 'progress') {
+                        updateProgress(machineId, parsed.progress, parsed.message);
+                    } else if (parsed.type === 'success') {
+                        console.log('✅ Training completed successfully');
+                    } else if (parsed.type === 'error') {
+                        console.error('❌ Training error:', parsed.message);
+                    }
+                } catch (e) {
+                    // Not JSON, ignore
+                }
             }
         });
         
@@ -981,28 +896,19 @@ async function trainModelWithCSV(machine, user, csvFilePath) {
         
         // Add timeout to prevent hanging
         const trainingTimeout = setTimeout(() => {
-            console.error(`⏰ Training timeout for machine ${machineId} after 60 seconds`);
+            console.error(`⏰ Training timeout for machine ${machineId} after 300 seconds`);
             pythonProcess.kill('SIGTERM');
             Machine.findByIdAndUpdate(machineId, {
                 training_status: 'failed',
                 training_progress: 0,
                 training_message: 'Training timed out. Please try again with a smaller file.'
             });
-        }, 60000); // 60 second timeout
+        }, 300000); // 5 minutes timeout
         
         pythonProcess.on('close', async (code) => {
             clearTimeout(trainingTimeout);
             const trainingDuration = Date.now() - processStartTime;
             console.log(`⏱️ Training process for machine ${machineId} completed in ${trainingDuration}ms with exit code ${code}`);
-            
-            // Clean up temporary files
-            [sampleCsvPath, columnsFilePath].forEach(filePath => {
-                if (fs.existsSync(filePath)) {
-                    fs.unlink(filePath, (err) => {
-                        if (err) console.error(`Error deleting temp file ${filePath}:`, err);
-                    });
-                }
-            });
             
             if (code !== 0) {
                 console.error(`❌ Training failed for machine ${machineId} with exit code ${code}`);
@@ -1015,34 +921,40 @@ async function trainModelWithCSV(machine, user, csvFilePath) {
             }
             
             try {
-                // Parse training results
+                // Parse training results from output
                 let trainingResult = null;
-                try {
-                    const lines = rawOutput.split('\n');
-                    const jsonLine = lines.find(line => line.trim().startsWith('{') && line.includes('success'));
-                    if (jsonLine) {
-                        trainingResult = JSON.parse(jsonLine.trim());
+                const lines = rawOutput.split('\n');
+                for (const line of lines) {
+                    try {
+                        const parsed = JSON.parse(line.trim());
+                        if (parsed.type === 'success' && parsed.stats) {
+                            trainingResult = parsed.stats;
+                            break;
+                        }
+                    } catch (e) {
+                        // Not JSON, continue
                     }
-                } catch (parseError) {
-                    console.error('Error parsing training output:', parseError);
                 }
                 
-                if (trainingResult && trainingResult.success) {
+                if (trainingResult) {
                     // Training successful - update machine with results
                     const modelParams = {
                         threshold: trainingResult.threshold,
-                        mae_threshold: trainingResult.mae_threshold || trainingResult.threshold,
-                        mean_loss: trainingResult.mean_loss,
-                        max_loss: trainingResult.max_loss,
-                        min_loss: trainingResult.min_loss,
-                        std_loss: trainingResult.std_loss,
+                        mean_error: trainingResult.mean_error,
+                        std_error: trainingResult.std_error,
+                        min_error: trainingResult.min_error,
+                        max_error: trainingResult.max_error,
                         percentile_90: trainingResult.percentile_90,
                         percentile_95: trainingResult.percentile_95,
                         percentile_99: trainingResult.percentile_99,
-                        source: 'custom_trained_model',
-                        trained_columns: selectedColumns,
-                        training_samples: dataRows.length,
-                        total_file_lines: dataRows.length,
+                        final_loss: trainingResult.final_loss,
+                        final_val_loss: trainingResult.final_val_loss,
+                        epochs_trained: trainingResult.epochs_trained,
+                        training_samples: trainingResult.training_samples,
+                        source: 'simple_trained_model',
+                        trained_columns: trainingResult.sensor_columns,
+                        sequence_length: trainingResult.sequence_length,
+                        model_type: trainingResult.model_type,
                         training_date: new Date().toISOString()
                     };
                     
@@ -1051,13 +963,13 @@ async function trainModelWithCSV(machine, user, csvFilePath) {
                         training_progress: 100,
                         model_params: modelParams,
                         modelStatus: 'trained',
-                        training_message: `Training completed successfully! Used ${dataRows.length} samples from ${dataRows.length} total lines.`,
+                        training_message: `Training completed successfully! Used ${trainingResult.training_samples} samples.`,
                         lastTrained: new Date()
                     });
                     
                     console.log(`✅ Training completed successfully for machine ${machineId}`);
                     console.log(`📊 Model threshold: ${trainingResult.threshold}`);
-                    console.log(`🎯 Training samples: ${dataRows.length} from ${dataRows.length} total lines`);
+                    console.log(`🎯 Training samples: ${trainingResult.training_samples}`);
                 } else {
                     throw new Error('Training completed but no valid results returned');
                 }
@@ -1089,9 +1001,9 @@ async function updateProgress(machineId, progress, message) {
             training_progress: progress,
             training_message: message
         });
-        console.log(`📈 Progress ${progress}%: ${message}`);
+        console.log(`📊 Progress update for ${machineId}: ${progress}% - ${message}`);
     } catch (error) {
-        console.error('Error updating progress:', error);
+        console.error(`Error updating progress for ${machineId}:`, error);
     }
 }
 
@@ -1102,305 +1014,6 @@ function forceGarbageCollection() {
         console.log('🧹 Forced garbage collection');
     }
 }
-
-async function trainModel(machine, user) {
-    const machineId = machine._id.toString();
-    const userId = user._id.toString();
-    
-    try {
-        // Check if pre-trained configuration exists
-        const pretrainedConfigPath = path.join(__dirname, '../models/pretrained_config.json');
-        if (!fs.existsSync(pretrainedConfigPath)) {
-            throw new Error('Pre-trained model configuration not found');
-        }
-        
-        const pretrainedConfig = JSON.parse(fs.readFileSync(pretrainedConfigPath, 'utf8'));
-        const pretrained = pretrainedConfig.pretrained_model;
-        
-        // Update machine with success status and pre-trained model parameters immediately
-        const modelParams = {
-            threshold: pretrained.threshold,
-            mae_threshold: pretrained.mae_threshold,
-            mean_loss: pretrained.mean_loss,
-            max_loss: pretrained.max_loss,
-            min_loss: pretrained.min_loss,
-            std_loss: pretrained.std_loss,
-            percentile_90: pretrained.percentile_90,
-            percentile_95: pretrained.percentile_95,
-            percentile_99: pretrained.percentile_99,
-            mae_stats: pretrained.mae_stats,
-            model_info: pretrained.model_info,
-            source: 'pre_trained_model',
-            trained_columns: pretrained.trained_columns
-        };
-        
-        await Machine.findByIdAndUpdate(machineId, {
-            training_status: 'completed',
-            training_progress: 100,
-            model_params: modelParams,
-            modelStatus: 'trained',
-            training_message: 'Pre-trained model applied instantly!',
-            lastTrained: new Date()
-        });
-        
-        console.log(`✅ Pre-trained model applied instantly for machine ${machineId}`);
-        console.log(`📊 Using pre-trained parameters: threshold=${pretrained.threshold}`);
-        console.log(`🎯 Model source: ${pretrained.source_data} (${pretrained.trained_columns.length} sensors)`);
-        
-    } catch (error) {
-        console.error(`❌ Error applying pre-trained model for machine ${machineId}:`, error);
-        
-        await Machine.findByIdAndUpdate(machineId, {
-            training_status: 'failed',
-            training_progress: 0,
-            training_message: `Error: ${error.message}`,
-            lastTrained: new Date()
-        });
-    }
-}
-
-// @route   POST /api/dashboard/machine/:id/setup-pretrained
-// @desc    Setup a machine to use the pre-trained model
-// @access  Private
-router.post('/machine/:id/setup-pretrained', auth, async (req, res) => {
-    try {
-        const { id } = req.params;
-        
-        const machine = await Machine.findOne({ _id: id, userId: req.user._id });
-        if (!machine) {
-            return res.status(404).json({ success: false, message: 'Machine not found' });
-        }
-
-        // Set up with pre-trained model
-        const pretrainedConfigPath = path.join(__dirname, '../models/pretrained_config.json');
-        if (!fs.existsSync(pretrainedConfigPath)) {
-            return res.status(500).json({ success: false, message: 'Pre-trained model configuration not found.' });
-        }
-        
-        const pretrainedConfig = JSON.parse(fs.readFileSync(pretrainedConfigPath, 'utf8'));
-        const pretrained = pretrainedConfig.pretrained_model;
-        
-        // Create sensors that match the expected columns
-        const defaultSensors = pretrained.trained_columns.map((columnName, index) => ({
-            sensorId: columnName,
-            name: columnName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-            type: 'numeric',
-            unit: index % 4 === 0 ? '°C' : index % 4 === 1 ? 'Hz' : index % 4 === 2 ? 'A' : 'bar',
-            minValue: 0,
-            maxValue: 100
-        }));
-
-        // Set up model parameters
-        const modelParams = {
-            threshold: pretrained.threshold,
-            mae_threshold: pretrained.mae_threshold,
-            mean_loss: pretrained.mean_loss,
-            max_loss: pretrained.max_loss,
-            min_loss: pretrained.min_loss,
-            std_loss: pretrained.std_loss,
-            percentile_90: pretrained.percentile_90,
-            percentile_95: pretrained.percentile_95,
-            percentile_99: pretrained.percentile_99,
-            mae_stats: pretrained.mae_stats,
-            model_info: pretrained.model_info,
-            source: 'pre_trained_model',
-            trained_columns: pretrained.trained_columns
-        };
-
-        // Update the machine
-        await Machine.findByIdAndUpdate(id, {
-            training_status: 'completed',
-            modelStatus: 'trained',
-            sensors: defaultSensors,
-            model_params: modelParams,
-            lastTrained: new Date(),
-            training_progress: 100,
-            training_message: 'Pre-trained model configured successfully!'
-        });
-
-        res.json({ 
-            success: true, 
-            message: 'Machine configured with pre-trained model successfully!',
-            sensorsConfigured: defaultSensors.length
-        });
-
-    } catch (error) {
-        console.error('Setup pre-trained model error:', error);
-        res.status(500).json({ success: false, message: 'Server error during setup' });
-    }
-});
-
-// @route   POST /api/dashboard/machine/:id/predict-csv
-// @desc    Get risk analysis for a CSV file containing sensor data window
-// @access  Private
-router.post('/machine/:id/predict-csv', auth, upload.single('csvFile'), async (req, res) => {
-    try {
-        const { id } = req.params;
-        const csvFile = req.file;
-
-        console.log(`🔍 CSV Prediction request for machine ${id}`);
-        console.log(`📊 CSV file received:`, csvFile?.originalname);
-
-        const machine = await Machine.findById(id);
-        if (!machine) {
-            console.log(`❌ Machine ${id} not found`);
-            return res.status(404).json({ success: false, message: 'Machine not found' });
-        }
-        
-        if (machine.userId.toString() !== req.user._id.toString()) {
-            console.log(`❌ User not authorized for machine ${id}`);
-            return res.status(403).json({ success: false, message: 'User not authorized' });
-        }
-        
-        // Check if model is trained
-        const isTrained = machine.modelStatus === 'trained' || 
-                         machine.training_status === 'completed' ||
-                         (machine.model_params && machine.model_params.source === 'pre_trained_model');
-        
-        if (!isTrained) {
-            console.log(`❌ Model for machine ${id} is not trained yet`);
-            return res.status(400).json({ success: false, message: 'Model for this machine is not trained yet.' });
-        }
-
-        if (!csvFile) {
-            return res.status(400).json({ success: false, message: 'No CSV file provided.' });
-        }
-
-        // Process the CSV file for prediction
-        const csvFilePath = csvFile.path;
-        console.log(`📂 Processing CSV file: ${csvFilePath}`);
-
-        // Use pre-trained model configuration
-        const pretrainedConfigPath = path.join(__dirname, '../models/pretrained_config.json');
-        if (!fs.existsSync(pretrainedConfigPath)) {
-            return res.status(500).json({ success: false, message: 'Pre-trained model configuration not found.' });
-        }
-        
-        const pretrainedConfig = JSON.parse(fs.readFileSync(pretrainedConfigPath, 'utf8'));
-        const pretrained = pretrainedConfig.pretrained_model;
-        const expectedColumns = pretrained.trained_columns;
-
-        // Create a temporary columns file for the prediction
-        const tempDir = path.join(__dirname, '..', 'uploads', 'temp');
-        if (!fs.existsSync(tempDir)) {
-            fs.mkdirSync(tempDir, { recursive: true });
-        }
-        const columnsFilePath = path.join(tempDir, `predict_columns_${machine._id}_${Date.now()}.json`);
-        fs.writeFileSync(columnsFilePath, JSON.stringify(expectedColumns));
-
-        // Start Python prediction process for CSV
-        const pythonScriptPath = path.join(__dirname, '..', 'models', 'anomaly.py');
-        console.log(`🚀 Starting CSV prediction: python3 ${pythonScriptPath} predict_csv test_user test_machine ${csvFilePath} ${columnsFilePath}`);
-        
-        const pythonProcess = spawn('python3', [
-            pythonScriptPath, 
-            'predict_csv',
-            'test_user', // Use test_user for pre-trained model
-            'test_machine', // Use test_machine for pre-trained model
-            csvFilePath,
-            columnsFilePath
-        ], {
-            stdio: ['pipe', 'pipe', 'pipe'],
-            env: { ...process.env, PYTHONUNBUFFERED: '1' }
-        });
-
-        let rawOutput = '';
-        let processStartTime = Date.now();
-        
-        pythonProcess.stdout.on('data', (data) => {
-            const output = data.toString();
-            rawOutput += output;
-            console.log(`[Python stdout for CSV prediction]: ${output.trim()}`);
-        });
-
-        pythonProcess.stderr.on('data', (data) => {
-            console.error(`[CSV Prediction Error]: ${data.toString()}`);
-        });
-
-        // Add timeout for CSV prediction
-        const predictionTimeout = setTimeout(() => {
-            console.error(`⏰ CSV prediction timeout for machine ${id} after 120 seconds`);
-            pythonProcess.kill('SIGTERM');
-            res.status(500).json({ success: false, message: 'CSV prediction timed out. Please try with a smaller file.' });
-        }, 120000); // 2 minute timeout
-
-        pythonProcess.on('close', async (code) => {
-            clearTimeout(predictionTimeout);
-            const predictionDuration = Date.now() - processStartTime;
-            console.log(`⏱️ CSV prediction process completed in ${predictionDuration}ms with exit code ${code}`);
-
-            // Clean up temporary files
-            [csvFilePath, columnsFilePath].forEach(filePath => {
-                if (fs.existsSync(filePath)) {
-                    fs.unlink(filePath, (err) => {
-                        if (err) console.error(`Error deleting temp file ${filePath}:`, err);
-                    });
-                }
-            });
-
-            if (code !== 0) {
-                return res.status(500).json({ success: false, message: 'CSV prediction script failed.' });
-            }
-
-            try {
-                const result = JSON.parse(rawOutput);
-                if (result.success) {
-                    // Process the CSV prediction results
-                    const analysisResults = result.data;
-                    
-                    // Calculate overall risk metrics
-                    const totalReadings = analysisResults.length;
-                    const anomalyCount = analysisResults.filter(r => r.is_anomaly).length;
-                    const anomalyPercentage = (anomalyCount / totalReadings) * 100;
-                    
-                    // Calculate average risk score
-                    const avgRiskScore = analysisResults.reduce((sum, r) => sum + r.reconstruction_error, 0) / totalReadings;
-                    
-                    // Calculate RUL and health score using the new helper functions
-                    const { rulEstimate, riskPercentage } = calculateRUL(avgRiskScore, anomalyPercentage > 5);
-                    const healthScore = calculateHealthScore(avgRiskScore, anomalyPercentage > 5);
-                    const overallStatus = determineMachineStatus(healthScore);
-                    
-                    // Update the machine in database
-                    await Machine.findByIdAndUpdate(machine._id, {
-                        healthScore: healthScore,
-                        rulEstimate: rulEstimate,
-                        status: overallStatus,
-                        lastUpdated: new Date()
-                    });
-                    
-                    console.log(`Updated machine ${machine._id}: healthScore=${healthScore}, rulEstimate=${rulEstimate}, status=${overallStatus}`);
-                    
-                    res.json({ 
-                        success: true, 
-                        data: {
-                            analysisResults: analysisResults,
-                            summary: {
-                                totalReadings: totalReadings,
-                                anomalyCount: anomalyCount,
-                                anomalyPercentage: Math.round(anomalyPercentage * 100) / 100,
-                                avgRiskScore: Math.round(avgRiskScore * 10000) / 10000,
-                                healthScore: healthScore,
-                                rulEstimate: rulEstimate,
-                                status: overallStatus,
-                                riskPercentage: riskPercentage
-                            }
-                        }
-                    });
-                } else {
-                    res.status(500).json({ success: false, message: result.error || 'CSV prediction failed.' });
-                }
-            } catch (parseError) {
-                console.error('Error parsing CSV prediction output:', parseError);
-                res.status(500).json({ success: false, message: 'Error processing prediction results.' });
-            }
-        });
-
-    } catch (error) {
-        console.error(`❌ Error in CSV prediction for machine ${id}:`, error);
-        res.status(500).json({ success: false, message: `CSV prediction error: ${error.message}` });
-    }
-});
 
 // Helper function to calculate RUL using specific model parameters
 function calculateRUL(riskScore, isAnomaly = false) {
