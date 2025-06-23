@@ -45,6 +45,8 @@ SpurHacks2025/
 ## 🛠️ Technology Stack
 
 ### Backend
+- **Anomaly LSTM Network** - Generating RUL Training features from Healthy Machine Runtime Data w/ Bayesing Inferencing (for Anomaly Scoring)
+- **Forecasting LSTM Network** - Reccurently Timestamping Training Features (RUL Targets) & Fitting | Modelling and Forecasting
 - **Node.js** - JavaScript runtime
 - **Express.js** - Web framework
 - **MongoDB** - Database
@@ -254,12 +256,6 @@ The authentication system is complete. To implement the RUL estimation features:
 ## 📄 License
 
 This project is licensed under the ISC License.
-
-## 📞 Support
-
-For support or questions:
-- Email: info@predictivemaintenance.com
-- Phone: +1 (555) 123-4567
 
 ---
 
