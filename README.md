@@ -1,6 +1,7 @@
-# Predictive Maintenance Dashboard
-## Built by Danial Ganjali, Justin Rui, Arjan Waraich, Emerson Ni
-A full-stack web application for machine-specific Remaining Useful Lifetime (RUL) estimation using anomaly detection and Bayesian inference.
+# Predictra - An All-In-One Personalized Predictive Maintenance Dashboard for Factory Owners
+## Any _Machine_, One _Dashboard_, No More _Surprises_.
+### Built by Danial Ganjali, Arjan Waraich, Justin Rui, Emerson Ni
+A full-stack platform for machine-specific Remaining Useful Lifetime (RUL) estimation using anomaly detection, Bayesian inferencing, LSTM networking, bootstrapping & XGboosting. Maximize uptime, increase efficiency, optimizing maintenance schedules and know **which**  machines are failing, **when**.
 
 ## 🚀 Features
 
