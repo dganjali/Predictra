@@ -10,3 +10,5 @@ pandas==2.1.4
 scikit-learn==1.3.2
 tensorflow==2.15.0
 joblib==1.3.2 
+# Ensure setuptools is installed so packages expecting distutils can find it
+setuptools>=65.0.0
