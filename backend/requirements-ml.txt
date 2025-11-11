@@ -1,0 +1,7 @@
+## Heavy ML & data packages - DO NOT install on Vercel serverless builds
+## Install these only on a dedicated ML host or local dev environment
+numpy==1.24.4
+pandas==2.1.4
+scikit-learn==1.3.2
+tensorflow==2.15.0
+joblib==1.3.2
