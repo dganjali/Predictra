@@ -61,6 +61,32 @@ document.addEventListener('DOMContentLoaded', function() {
     } catch (e) {
         console.warn('Failed to load subscribe script', e);
     }
+
+    // Wire the nav Join CTA (if present) to focus/submit the subscribe form
+    const joinBtn = document.getElementById('join-btn');
+    if (joinBtn) {
+        joinBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const anchor = document.getElementById('subscribe');
+            const emailInput = document.getElementById('email') || document.getElementById('email-2');
+            const form = document.getElementById('subscribe-form') || document.getElementById('subscribe-form-2');
+
+            if (anchor) {
+                anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+
+            // After a short delay, focus the input and if it contains an email, submit the form
+            setTimeout(() => {
+                if (emailInput) emailInput.focus();
+                if (emailInput && emailInput.value && validateEmail(emailInput.value) && form) {
+                    // programmatically submit the form (subscribe.js handles submit)
+                    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                }
+            }, 300);
+        });
+    }
+    // Initialize scroll reveal animations
+    initScrollReveal();
 });
 
 // Check authentication status and update UI accordingly
@@ -76,6 +102,7 @@ function checkAuthStatus() {
         updateNavForUnauthenticatedUser();
     }
 }
+
 
 // Update navigation for authenticated users
 function updateNavForAuthenticatedUser(user) {
@@ -318,3 +345,21 @@ function initTypewriter() {
 
     type();
 } 
+
+// Scroll reveal: adds 'revealed' class to elements with .reveal-on-scroll
+function initScrollReveal() {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.classList.add('revealed');
+                observer.unobserve(entry.target);
+            }
+        });
+    }, { threshold: 0.12 });
+
+    document.querySelectorAll('.reveal-on-scroll').forEach(el => {
+        observer.observe(el);
+    });
+}

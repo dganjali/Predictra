@@ -16,19 +16,16 @@
                     <img src="images/Logo.png" alt="Predictra Logo" style="height: 44px; width: auto;">
                 </a>
             </div>
-            <ul class="nav-menu">
-                <li class="nav-item">
-                    <a href="index.html" class="nav-link active">Home</a>
-                </li>
-                <li class="nav-item">
-                    <a href="about.html" class="nav-link">About</a>
-                </li>
-            </ul>
+            <!-- Simplified nav: only a Join CTA to avoid dead links -->
+            <div class="nav-cta">
+                <button id="join-btn" class="nav-link btn-primary">Join</button>
+            </div>
         </div>
     </nav>
 
     <main>
-        <section class="hero">
+        <!-- Use the photographic hero at the top for visual impact -->
+        <section class="about-hero hero-with-photo">
             <div class="hero-container">
                 <div class="hero-content">
                     <h1 class="hero-title">
@@ -78,66 +75,53 @@
             </div>
         </section>
 
-        <section class="features">
+        <!-- Decorative divider between hero and content -->
+        <svg class="svg-divider" viewBox="0 0 1440 60" preserveAspectRatio="none" aria-hidden="true">
+            <path d="M0,30 C360,90 1080,-30 1440,30 L1440,60 L0,60 Z" fill="#f8fafc"></path>
+        </svg>
+
+        <!-- Simplified content below the fold: How it works + Benefits + compact CTA -->
+        <section class="simple-steps reveal-on-scroll">
             <div class="container">
-                <h2 class="section-title">Key Features</h2>
-                <div class="features-grid">
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-brain"></i>
-                        </div>
-                        <h3>AI-Powered Analysis</h3>
-                        <p>Advanced machine learning algorithms analyze sensor data and anomaly patterns to predict equipment failures.</p>
+                <h2 class="section-title">How it works</h2>
+                <div class="steps-grid">
+                    <div class="step-card reveal-on-scroll">
+                        <h3>1. Connect sensors</h3>
+                        <p>Stream sensor data from machines and collect telemetry with small agents or existing telemetry pipelines.</p>
                     </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-chart-line"></i>
-                        </div>
-                        <h3>Real-time Monitoring</h3>
-                        <p>Continuous monitoring of machine health with real-time alerts and predictive maintenance scheduling.</p>
+                    <div class="step-card reveal-on-scroll">
+                        <h3>2. Detect anomalies</h3>
+                        <p>Models analyze data and surface anomalies that indicate component wear or abnormal behavior.</p>
                     </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-shield-alt"></i>
-                        </div>
-                        <h3>Conservative Estimates</h3>
-                        <p>Bayesian inference ensures conservative RUL estimates to prevent unexpected failures and optimize maintenance.</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-database"></i>
-                        </div>
-                        <h3>No Failure Data Required</h3>
-                        <p>Create RUL estimates using anomaly scores and metadata without requiring historical failure data.</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-cogs"></i>
-                        </div>
-                        <h3>Automated Model Retraining</h3>
-                        <p>Our system can be configured to automatically retrain models as new data becomes available, ensuring predictions stay accurate over time.</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-cloud-upload-alt"></i>
-                        </div>
-                        <h3>Cloud-Based & Scalable</h3>
-                        <p>Our solution is deployed on the cloud, ensuring high availability, security, and scalability for any number of machines.</p>
+                    <div class="step-card reveal-on-scroll">
+                        <h3>3. Estimate RUL</h3>
+                        <p>We produce conservative Remaining Useful Life estimates and recommended maintenance windows.</p>
                     </div>
                 </div>
             </div>
         </section>
 
-        <section class="cta">
+        <section class="benefits reveal-on-scroll">
+            <div class="container">
+                <h2 class="section-title">Benefits</h2>
+                <div class="benefits-grid">
+                    <div class="benefit">Reduce downtime</div>
+                    <div class="benefit">Save maintenance costs</div>
+                    <div class="benefit">Improve planning</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="compact-cta reveal-on-scroll">
             <div class="container">
                 <div class="cta-content">
-                    <h2>Get updates & early access</h2>
-                    <p>Sign up for product updates, launch announcements, and early access to Predictra.</p>
+                    <h2>Want early access?</h2>
+                    <p>Join the mailing list for updates and early invites.</p>
                     <form id="subscribe-form-2" class="subscribe-form" onsubmit="return false;">
                         <input id="email-2" type="email" placeholder="Your work email" required />
                         <button id="subscribe-btn-2" class="btn btn-primary btn-large" type="submit">Notify Me</button>
                     </form>
-                    <p id="subscribe-msg-2" class="subscribe-msg" aria-live="polite" style="margin-top:0.75rem"></p>
+                    <p id="subscribe-msg-2" class="subscribe-msg" aria-live="polite"></p>
                 </div>
             </div>
         </section>
