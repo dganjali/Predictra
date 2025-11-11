@@ -1,8 +1,5 @@
 {
   "version": 2,
-  "installCommand": "python -m pip install --upgrade pip setuptools wheel && python -m pip install --prefer-binary -r backend/requirements.txt",
-  "buildCommand": "echo \"No build step required\"",
-  "routes": [
-    { "src": "/(.*)", "dest": "/backend/server.js" }
-  ]
+  "buildCommand": "mkdir -p public && cp -a frontend/. public/",
+  "outputDirectory": "public"
 }

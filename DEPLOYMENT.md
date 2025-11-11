@@ -35,6 +35,30 @@ How to deploy on Vercel (recommended quick steps)
    python -m pip install -r backend/requirements-ml.txt
    ```
 
+4. Set `BACKEND_URL` environment variable in your Vercel Project Settings to the
+  externally hosted backend (e.g., `https://your-backend.example.com` or
+  `http://localhost:3000` for local testing). The repository includes a
+  serverless proxy at `api/[...proxy].js` that forwards `/api/*` calls to
+  `BACKEND_URL` so the frontend can use the same `/api/...` paths in production.
+
+Environment variables to configure in Vercel (example):
+- BACKEND_URL=https://your-backend.example.com
+- NODE_ENV=production
+
+Mailing list (SendGrid) setup
+- To enable real mailing list notifications, set the following environment variables in Vercel:
+  - SENDGRID_API_KEY — your SendGrid API key
+  - OWNER_EMAIL — the email address that should receive subscription notifications
+
+Example:
+- SENDGRID_API_KEY=SG.xxxxx
+- OWNER_EMAIL=you@yourdomain.com
+
+If these are not set, the built-in `/api/subscribe` endpoint will return a success response but won't send notifications; it will still log the email in Vercel function logs for manual retrieval.
+
+If `BACKEND_URL` is not set, API calls to `/api/*` will return a clear 501 JSON
+error explaining the missing configuration.
+
 Optional: If you want Vercel to host a lightweight API but still call the ML
 service, change your code so imports of TensorFlow or other heavy libs are
 performed lazily (inside the endpoint that needs them) and only when that

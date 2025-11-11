@@ -51,6 +51,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Initialize typewriter
     initTypewriter();
+
+    // Dynamically load subscribe.js (wires the simple mailing-list forms)
+    try {
+        const s = document.createElement('script');
+        s.src = 'js/subscribe.js';
+        s.defer = true;
+        document.body.appendChild(s);
+    } catch (e) {
+        console.warn('Failed to load subscribe script', e);
+    }
 });
 
 // Check authentication status and update UI accordingly
