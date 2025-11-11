@@ -25,94 +25,10 @@ app.use(
       "style-src": ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
       "font-src": ["'self'", "https://cdnjs.cloudflare.com"],
     },
-  })
-);
+  // Backend server disabled in this repository. This project is now a static
+  // landing page deployed on Vercel with a small serverless subscribe endpoint
+  // at `/api/subscribe`. The original Node/Express backend has been intentionally
+  // disabled. To re-enable a full backend, replace this file with an Express
+  // server and restore the `routes/` and `models/` code.
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again later.'
-});
-app.use(limiter);
-
-// CORS configuration
-app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? ['https://yourdomain.com'] 
-    : ['http://localhost:3000', 'http://127.0.0.1:3000'],
-  credentials: true
-}));
-
-// Body parsing middleware
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-// API Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/dashboard', dashboardRoutes);
-
-// Serve frontend pages
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend/index.html'));
-});
-
-app.get('/signin', (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend/signin.html'));
-});
-
-app.get('/signup', (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend/signup.html'));
-});
-
-app.get('/dashboard', (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend/dashboard.html'));
-});
-
-app.get('/about', (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend/about.html'));
-});
-
-app.get('/test', (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend/test.html'));
-});
-
-// Serve static files from frontend (CSS, JS, etc.)
-app.use(express.static(path.join(__dirname, '../frontend')));
-
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ 
-    success: false, 
-    message: 'Something went wrong!',
-    error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
-  });
-});
-
-// 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({ 
-    success: false, 
-    message: 'Route not found' 
-  });
-});
-
-// Connect to MongoDB
-mongoose.connect(process.env.MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
-.then(() => {
-  console.log('Connected to MongoDB');
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-    console.log(`Environment: ${process.env.NODE_ENV}`);
-  });
-})
-.catch((err) => {
-  console.error('MongoDB connection error:', err);
-  process.exit(1);
-});
-
-module.exports = app; 
+  module.exports = null;

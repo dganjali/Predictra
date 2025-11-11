@@ -1,77 +1,12 @@
+// Dashboard routes disabled - backend functionality removed.
 const express = require('express');
-const { auth } = require('../middleware/auth');
-const User = require('../models/User');
-const Machine = require('../models/Machine');
-const path = require('path');
-const fs = require('fs');
-const multer = require('multer');
-const { spawn } = require('child_process');
-const readline = require('readline');
-
 const router = express.Router();
 
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        const uploadPath = path.join(__dirname, '../uploads');
-        fs.mkdirSync(uploadPath, { recursive: true });
-        cb(null, uploadPath);
-    },
-    filename: (req, file, cb) => {
-        cb(null, `${Date.now()}-${file.originalname}`);
-    }
+router.use((req, res) => {
+    res.status(410).json({ success: false, message: 'Dashboard API removed for static deployment.' });
 });
 
-const upload = multer({
-    storage: storage,
-    fileFilter: (req, file, cb) => {
-        if (file.mimetype === 'text/csv' || file.originalname.endsWith('.csv')) {
-            cb(null, true);
-        } else {
-            cb(new Error('Only .csv files are allowed!'), false);
-        }
-    }
-});
-
-// Global variables for training monitoring
-let trainingProcess = null;
-let trainingStartTime = null;
-let trainingTimeout = null;
-let progressUpdateInterval = null;
-let lastProgressUpdate = null;
-
-// @route   GET /api/dashboard/overview
-// @desc    Get dashboard overview data
-// @access  Private
-router.get('/overview', auth, async (req, res) => {
-  try {
-    // Get user's machines
-    const machines = await Machine.find({ userId: req.user._id });
-    
-    const overviewData = {
-      totalMachines: machines.length,
-      criticalAlerts: machines.filter(m => m.status === 'critical').length,
-      maintenanceDue: machines.filter(m => {
-        if (!m.lastMaintenance || !m.maintenanceInterval) return false;
-        const daysSinceMaintenance = (Date.now() - m.lastMaintenance.getTime()) / (1000 * 60 * 60 * 24);
-        return daysSinceMaintenance >= m.maintenanceInterval;
-      }).length,
-      healthyMachines: machines.filter(m => m.status === 'healthy').length,
-      recentActivity: []
-    };
-
-    res.json({
-      success: true,
-      data: overviewData
-    });
-  } catch (error) {
-    console.error('Dashboard overview error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
-  }
-});
+module.exports = router;
 
 // @route   GET /api/dashboard/machines
 // @desc    Get list of machines for the current user

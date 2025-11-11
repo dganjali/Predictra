@@ -123,11 +123,11 @@ function updateNavForUnauthenticatedUser() {
     navMenu.innerHTML = '';
     
     // Add unauthenticated user menu items
+    // Sign-in and sign-up pages were removed in the static build; replace them with a Join CTA
     const menuItems = [
         { href: '/', text: 'Home', icon: 'fas fa-home' },
         { href: '/about', text: 'About', icon: 'fas fa-info-circle' },
-        { href: '/signin', text: 'Sign In', icon: 'fas fa-sign-in-alt' },
-        { href: '/signup', text: 'Sign Up', icon: 'fas fa-user-plus', class: 'btn-primary' }
+        { href: '#subscribe', text: 'Join', icon: 'fas fa-envelope', class: 'btn-primary' }
     ];
     
     menuItems.forEach(item => {

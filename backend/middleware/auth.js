@@ -1,25 +1,8 @@
-const jwt = require('jsonwebtoken');
-const User = require('../models/User');
-
-const auth = async (req, res, next) => {
-  try {
-    let token = req.header('Authorization');
-
-    // If token is in the header, it's in the format "Bearer <token>"
-    if (token && token.startsWith('Bearer ')) {
-      token = token.substring(7, token.length);
-    } 
-    // Allow token to be passed as a query parameter for EventSource
-    else if (req.query.token) {
-      token = req.query.token;
-    }
-
-    if (!token) {
-      return res.status(401).json({
-        success: false,
-        message: 'Access denied. No token provided.'
-      });
-    }
+// Authentication middleware disabled for static deployment. If a request
+// reaches this middleware, respond with 410 to indicate the API was removed.
+exports.auth = (req, res, next) => {
+  res.status(410).json({ success: false, message: 'Auth middleware removed for static deployment.' });
+};
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findById(decoded.userId).select('-password');

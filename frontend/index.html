@@ -13,8 +13,7 @@
         <div class="nav-container">
             <div class="nav-logo">
                 <a href="/" style="text-decoration: none; color: inherit; display: flex; align-items: center; gap: 0.5rem;">
-                    <img src="images/Logo.png" alt="Predictra Logo" style="height: 40px; width: auto;">
-                    <span>Predictra</span>
+                    <img src="images/Logo.png" alt="Predictra Logo" style="height: 44px; width: auto;">
                 </a>
             </div>
             <ul class="nav-menu">
@@ -39,11 +38,13 @@
                         Advanced predictive maintenance using anomaly detection and Bayesian inference to estimate remaining useful lifetime for industrial machinery.
                     </p>
                     <div class="hero-buttons">
-                        <form id="subscribe-form" class="subscribe-form" onsubmit="return false;">
+                        <!-- Anchor for nav CTA -->
+                        <div id="subscribe" class="subscribe-anchor" aria-hidden="true"></div>
+                        <form id="subscribe-form" class="subscribe-form" onsubmit="return false;" aria-label="Subscribe to product updates mailing list">
                             <input id="email" type="email" placeholder="Enter your email" required />
                             <button id="subscribe-btn" class="btn btn-primary btn-large" type="submit">Join our mailing list</button>
                         </form>
-                        <p id="subscribe-msg" class="subscribe-msg" aria-live="polite" style="margin-top:0.75rem"></p>
+                        <p id="subscribe-msg" class="subscribe-msg" aria-live="polite"></p>
                     </div>
                 </div>
                 <div class="hero-image">
@@ -152,16 +153,8 @@
                     <p>Advanced machine learning for industrial predictive maintenance and RUL estimation.</p>
                 </div>
                 <div class="footer-section">
-                    <h4>Quick Links</h4>
-                    <ul>
-                        <li><a href="index.html">Home</a></li>
-                        <li><a href="about.html">About</a></li>
-                    </ul>
-                </div>
-                <div class="footer-section">
                     <h4>Contact</h4>
-                    <p>Email: info@predictra.com</p>
-                    <p>Phone: +1 (555) 123-4567</p>
+                    <p>Email: hello@predictra.com</p>
                 </div>
             </div>
             <div class="footer-bottom">
