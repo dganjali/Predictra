@@ -87,6 +87,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     // Initialize scroll reveal animations
     initScrollReveal();
+    // Initialize showcase interactions (testimonials carousel, faq toggles)
+    initShowcaseInteractions();
 });
 
 // Check authentication status and update UI accordingly
@@ -362,4 +364,107 @@ function initScrollReveal() {
     document.querySelectorAll('.reveal-on-scroll').forEach(el => {
         observer.observe(el);
     });
+}
+
+// Lightweight interactions for the new landing sections
+function initShowcaseInteractions() {
+    // Testimonials carousel
+    const testimonials = Array.from(document.querySelectorAll('.testimonials-wrap .testimonial'));
+    const dots = Array.from(document.querySelectorAll('.testimonials-controls .dot'));
+    let current = 0;
+    if (testimonials.length) {
+        const show = (index) => {
+            testimonials.forEach((t, i) => t.classList.toggle('active', i === index));
+            dots.forEach((d, i) => d.classList.toggle('active', i === index));
+            current = index;
+        };
+
+        // initial show
+        show(0);
+
+        // wire dots
+        dots.forEach(d => d.addEventListener('click', (e) => {
+            const to = Number(d.getAttribute('data-to')) || 0;
+            show(to);
+        }));
+
+        // auto-rotate every 6s
+        setInterval(() => {
+            show((current + 1) % testimonials.length);
+        }, 6000);
+    }
+
+    // Smoothly toggle details for FAQ to animate height (basic progressive enhancement)
+    document.querySelectorAll('.faq-item').forEach(item => {
+        item.addEventListener('toggle', (e) => {
+            // no-op placeholder for future animations; browsers handle details disclosure
+        });
+    });
+
+    // Request demo button placeholder - scroll to contact / subscribe anchor
+    const demoBtn = document.getElementById('request-demo');
+    if (demoBtn) demoBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const anchor = document.getElementById('subscribe');
+        if (anchor) anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        const email = document.getElementById('email') || document.getElementById('email-3');
+        if (email) email.focus();
+    });
+
+    // Side features interactions
+    const sideItems = Array.from(document.querySelectorAll('.side-features .sf-item'));
+    const showcaseTitle = document.querySelector('.showcase-body .section-title');
+    const showcaseLead = document.querySelector('.showcase-body .lead-text');
+    const sideFeatureContent = {
+        predictive: {
+            title: 'Predictive models that learn per-machine',
+            desc: 'Bayesian and ensemble techniques yield calibrated RUL estimates and uncertainty bands for confident planning.'
+        },
+        anomaly: {
+            title: 'Explainable anomaly signals',
+            desc: 'Signal attribution and timelines help engineers verify root causes quickly and act with evidence.'
+        },
+        ops: {
+            title: 'Designed for operations',
+            desc: 'Integrations with SCADA, MES, and common telemetry systems make adoption frictionless.'
+        },
+        alerts: {
+            title: 'Contextual, actionable alerts',
+            desc: 'Each alert includes confidence, affected components, and recommended maintenance windows.'
+        }
+    };
+
+    let currentSide = 0;
+    if (sideItems.length) {
+        const setActive = (idx) => {
+            sideItems.forEach((it, i) => it.classList.toggle('active', i === idx));
+            currentSide = idx;
+            const key = sideItems[idx].getAttribute('data-feature');
+            if (sideFeatureContent[key]) {
+                if (showcaseTitle) showcaseTitle.textContent = sideFeatureContent[key].title;
+                if (showcaseLead) showcaseLead.textContent = sideFeatureContent[key].desc;
+            }
+        };
+
+        sideItems.forEach((it, i) => {
+            it.addEventListener('click', (e) => {
+                e.preventDefault();
+                setActive(i);
+            });
+            it.addEventListener('mouseenter', () => {
+                it.classList.add('hover');
+            });
+            it.addEventListener('mouseleave', () => {
+                it.classList.remove('hover');
+            });
+        });
+
+        // initialize
+        setActive(0);
+
+        // auto-rotate sidebar highlights every 8s
+        setInterval(() => {
+            setActive((currentSide + 1) % sideItems.length);
+        }, 8000);
+    }
 }

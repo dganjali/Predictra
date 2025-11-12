@@ -1,5 +1,7 @@
 {
   "version": 2,
-  "buildCommand": "mkdir -p public && cp -a frontend/. public/",
-  "outputDirectory": "public"
+  "buildCommand": "node scripts/copy-images.js && next build",
+  "build": {
+    "env": {}
+  }
 }

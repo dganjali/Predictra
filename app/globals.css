@@ -1,0 +1,4 @@
+/* Minimal global CSS for Next app. The site's main styles are loaded from /css/styles.css */
+:root { }
+html,body,#root { height: 100%; }
+body { margin: 0; font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; }

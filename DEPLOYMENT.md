@@ -37,9 +37,9 @@ How to deploy on Vercel (recommended quick steps)
 
 4. Set `BACKEND_URL` environment variable in your Vercel Project Settings to the
   externally hosted backend (e.g., `https://your-backend.example.com` or
-  `http://localhost:3000` for local testing). The repository includes a
-  serverless proxy at `api/[...proxy].js` that forwards `/api/*` calls to
-  `BACKEND_URL` so the frontend can use the same `/api/...` paths in production.
+  `http://localhost:3000` for local testing). The repository includes a serverless
+  proxy at `api/[...proxy].js` that forwards `/api/*` calls to `BACKEND_URL` so
+  the frontend can use the same `/api/...` paths in production.
 
 Environment variables to configure in Vercel (example):
 - BACKEND_URL=https://your-backend.example.com
@@ -55,6 +55,13 @@ Example:
 - OWNER_EMAIL=you@yourdomain.com
 
 If these are not set, the built-in `/api/subscribe` endpoint will return a success response but won't send notifications; it will still log the email in Vercel function logs for manual retrieval.
+
+Note about static assets and the Next.js migration
+- The Next.js app expects the main CSS to be at `/css/styles.css` and images to
+  live in `/public/images/`. To ensure Vercel has those files during build, the
+  project's `vercel.json` runs `node scripts/copy-images.js` before `next build`,
+  copying `frontend/images/*` into `public/images/`. No manual step is required
+  before deploying to Vercel; the build will populate the `public/` folder automatically.
 
 If `BACKEND_URL` is not set, API calls to `/api/*` will return a clear 501 JSON
 error explaining the missing configuration.
