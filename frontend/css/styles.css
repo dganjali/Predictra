@@ -271,12 +271,13 @@ a:hover {
 
 /* Reveal animations for sections */
 .reveal-on-scroll {
-    opacity: 0;
-    transform: translateY(18px) scale(0.995);
-    transition: opacity 600ms cubic-bezier(.2,.9,.2,1), transform 600ms cubic-bezier(.2,.9,.2,1);
-    will-change: opacity, transform;
+    /* Ensure content is visible even if JS doesn't run (progressive enhancement fallback) */
+    opacity: 1;
+    transform: none;
+    transition: none;
 }
 .reveal-on-scroll.revealed {
+    /* keep compatibility with JS that toggles 'revealed' */
     opacity: 1;
     transform: none;
 }

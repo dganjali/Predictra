@@ -21,7 +21,22 @@ async function copyDir(srcDir, destDir) {
   }
 }
 
-const SRC = path.resolve(__dirname, '..', 'frontend', 'images')
-const DEST = path.resolve(__dirname, '..', 'public', 'images')
+// Copy multiple frontend static asset directories into public so both
+// the static frontend files and the Next app reference the same assets.
+const ASSET_DIRS = [
+  { src: path.resolve(__dirname, '..', 'frontend', 'images'), dest: path.resolve(__dirname, '..', 'public', 'images') },
+  { src: path.resolve(__dirname, '..', 'frontend', 'css'), dest: path.resolve(__dirname, '..', 'public', 'css') },
+  { src: path.resolve(__dirname, '..', 'frontend', 'js'), dest: path.resolve(__dirname, '..', 'public', 'js') }
+]
 
-copyDir(SRC, DEST).then(() => console.log('Images copy complete.'))
+;(async () => {
+  for (const d of ASSET_DIRS) {
+    try {
+      await copyDir(d.src, d.dest)
+    } catch (err) {
+      console.error(`Failed copying from ${d.src} -> ${d.dest}:`, err)
+      process.exitCode = 1
+    }
+  }
+  console.log('Static assets copy complete.')
+})()
