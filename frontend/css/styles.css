@@ -180,7 +180,7 @@ a:hover {
 
 /* Hero photo tweaks */
 .hero-with-photo {
-    background: linear-gradient(rgba(4,7,15,0.45), rgba(4,7,15,0.45)), url('../images/factory photo.png') center/cover no-repeat;
+    background: linear-gradient(rgba(4,7,15,0.45), rgba(4,7,15,0.45)), url('../images/factory%20photo.png') center/cover no-repeat;
     color: white;
     padding: 6rem 0;
 }
