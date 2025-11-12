@@ -2,31 +2,55 @@ import React from 'react'
 
 export default function Features() {
   return (
-    <section className="features reveal-on-scroll" aria-labelledby="features-heading">
+    <section className="features">
       <div className="container">
-        <h2 id="features-heading" className="section-title">What Predictra brings to your floor</h2>
-        <p className="lead-text" style={{ textAlign: 'center', maxWidth: 820, margin: '0.5rem auto 2rem', color: 'var(--text-secondary)' }}>A single platform to monitor assets, detect anomalies early, and schedule maintenance with confidence. Built for engineers and operations teams who demand reliability and explainability.</p>
+        <h2 className="section-title">Everything you need for predictive maintenance</h2>
+        <p className="section-subtitle">
+          Powerful features designed to keep your operations running smoothly
+        </p>
 
         <div className="features-grid">
-          <div className="feature-card reveal-on-scroll">
-            <div className="feature-icon"><i className="fas fa-microchip"></i></div>
-            <h3>Edge & Cloud Ready</h3>
-            <p>Deploy lightweight agents at the edge or integrate with your existing telemetry — our models adapt to different data sources and volumes.</p>
+          <div className="feature-card">
+            <div className="feature-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+              </svg>
+            </div>
+            <h3>Real-time Monitoring</h3>
+            <p>Continuous monitoring of machine health with instant anomaly detection and alerts.</p>
           </div>
-          <div className="feature-card reveal-on-scroll">
-            <div className="feature-icon"><i className="fas fa-bolt"></i></div>
-            <h3>Real-time Anomaly Detection</h3>
-            <p>Detect deviations minutes after they occur with unsupervised anomaly detectors tuned per-machine.</p>
+
+          <div className="feature-card">
+            <div className="feature-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+              </svg>
+            </div>
+            <h3>AI-Powered Predictions</h3>
+            <p>Advanced machine learning models estimate remaining useful lifetime with high accuracy.</p>
           </div>
-          <div className="feature-card reveal-on-scroll">
-            <div className="feature-icon"><i className="fas fa-chart-line"></i></div>
-            <h3>Probabilistic RUL</h3>
-            <p>Bayesian models produce uncertainty-aware Remaining Useful Life estimates so planners can prioritize repairs smartly.</p>
+
+          <div className="feature-card">
+            <div className="feature-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                <polyline points="22 4 12 14.01 9 11.01"/>
+              </svg>
+            </div>
+            <h3>Actionable Insights</h3>
+            <p>Get clear recommendations and maintenance schedules based on data-driven analysis.</p>
           </div>
-          <div className="feature-card reveal-on-scroll">
-            <div className="feature-icon"><i className="fas fa-tools"></i></div>
-            <h3>Actionable Alerts</h3>
-            <p>Context-rich alerts include root-cause signals, confidence scores, and recommended next steps for technicians.</p>
+
+          <div className="feature-card">
+            <div className="feature-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                <line x1="8" y1="21" x2="16" y2="21"/>
+                <line x1="12" y1="17" x2="12" y2="21"/>
+              </svg>
+            </div>
+            <h3>Easy Integration</h3>
+            <p>Seamlessly connect with your existing systems and workflows without disruption.</p>
           </div>
         </div>
       </div>

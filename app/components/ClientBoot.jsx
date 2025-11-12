@@ -194,12 +194,12 @@ export default function ClientBoot() {
     }
 
     handleSubscribe('subscribe-form', 'email', 'subscribe-msg')
-    handleSubscribe('subscribe-form-3', 'email-3', 'subscribe-msg-3')
+    handleSubscribe('subscribe-form-2', 'email-2', 'subscribe-msg-2')
 
     // cleanup on unmount
     return () => {
       window.removeEventListener('scroll', onScroll)
-      const cleanupCandidates = ['__cleanupTestimonial', '__cleanupSide', '__cleanup_subscribe-form', '__cleanup_subscribe-form-3']
+      const cleanupCandidates = ['__cleanup_subscribe-form', '__cleanup_subscribe-form-2']
       cleanupCandidates.forEach(key => {
         try {
           if (typeof window[key] === 'function') window[key]()
