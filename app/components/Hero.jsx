@@ -9,7 +9,7 @@ export default function Hero() {
           <p className="hero-subtitle">Advanced predictive maintenance using anomaly detection and Bayesian inference to estimate remaining useful lifetime for industrial machinery.</p>
           <div className="hero-buttons">
             <div id="subscribe" className="subscribe-anchor" aria-hidden="true"></div>
-            <form id="subscribe-form" className="subscribe-form" onSubmit={(e) => e.preventDefault()} aria-label="Subscribe to product updates mailing list">
+            <form id="subscribe-form" className="subscribe-form" aria-label="Subscribe to product updates mailing list">
               <input id="email" type="email" placeholder="Enter your email" required />
               <button id="subscribe-btn" className="btn btn-primary btn-large" type="submit">Join our mailing list</button>
             </form>
