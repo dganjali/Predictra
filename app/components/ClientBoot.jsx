@@ -199,10 +199,14 @@ export default function ClientBoot() {
     // cleanup on unmount
     return () => {
       window.removeEventListener('scroll', onScroll)
-      if (window.__cleanupTestimonial) window.__cleanupTestimonial()
-      if (window.__cleanupSide) window.__cleanupSide()
-      if (window.__cleanup_subscribe-form) window.__cleanup_subscribe-form && window.__cleanup_subscribe-form()
-      if (window.__cleanup_subscribe-form-3) window.__cleanup_subscribe-form-3 && window.__cleanup_subscribe-form-3()
+      const cleanupCandidates = ['__cleanupTestimonial', '__cleanupSide', '__cleanup_subscribe-form', '__cleanup_subscribe-form-3']
+      cleanupCandidates.forEach(key => {
+        try {
+          if (typeof window[key] === 'function') window[key]()
+        } catch (err) {
+          // ignore cleanup errors
+        }
+      })
     }
   }, [])
 
