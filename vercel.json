@@ -1,9 +1,0 @@
-{
-  "version": 2,
-  "buildCommand": "node scripts/copy-images.js && next build",
-  "build": {
-    "env": {}
-  },
-  "cleanUrls": true,
-  "trailingSlash": false
-}

@@ -1,0 +1,1 @@
+Place your logo (logo.svg), favicon (favicon.png), and hero image (hero.png) in this folder. Replace these placeholders with actual images before deploying.
