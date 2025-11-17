@@ -10,13 +10,18 @@
  - Optional: Airtable integration — if you prefer a quick hosted datastore, you can configure Airtable and set the following Vercel environment variables: `AIRTABLE_API_KEY`, `AIRTABLE_BASE_ID`, and optional `AIRTABLE_TABLE_NAME` (defaults to `Waitlist`). When these are set the serverless function will attempt to create a record in your Airtable base instead of writing to disk.
 
 Vercel deployment notes
- - If Vercel detects a Next.js app in the repo root it may try to run a Next build. To avoid that and ensure the `frontend/` Vite app is built correctly, either:
-	 1. In the Vercel dashboard set the Project Root to `frontend` and use the Framework Preset `Other` (or `Vite` if available). Set Build Command to `npm run build` and Output Directory to `dist`.
-	 2. Or keep the project root at the repo root and add the provided `vercel.json` (already added) which instructs Vercel to run a static-build using `frontend/package.json` and route `/api` calls to `frontend/api` serverless functions.
 
- - Environment variables (set in Vercel dashboard):
-	 - `AIRTABLE_API_KEY` — your Airtable API key (optional)
-	 - `AIRTABLE_BASE_ID` — your Airtable Base ID (optional)
-	 - `AIRTABLE_TABLE_NAME` — table name (optional, defaults to `Waitlist`)
+- Vercel auto-detects Vite projects. Recommended workflow:
+	1. In the Vercel dashboard set Project Root to `frontend`.
+	2. Framework Preset: choose `Vite` (or `Other`).
+	3. Build Command: `npm run build`
+	4. Output Directory: `dist`
 
- - If you prefer Supabase instead, I can implement that quickly; tell me and I'll add instructions.
+- Environment variables (set in Vercel dashboard):
+	- `AIRTABLE_API_KEY` — your Airtable API key (optional)
+	- `AIRTABLE_BASE_ID` — your Airtable Base ID (optional)
+	- `AIRTABLE_TABLE_NAME` — table name (optional, defaults to `Waitlist`)
+
+- If you'd rather keep everything at the repo root without changing Project Root, I previously added a `vercel.json` route helper; I removed it because Vercel detects Vite automatically and it's simpler to set Project Root to `frontend` in the dashboard.
+
+ - If you prefer Supabase instead of Airtable, I can add that quickly — tell me which provider you prefer.
