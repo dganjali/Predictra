@@ -9,14 +9,14 @@ export default function App() {
   const [open, setOpen] = useState(false)
 
   return (
-    <div className="app">
-      <Navbar onJoin={() => setOpen(true)} />
+    <div className="min-h-screen bg-white">
+      <Navbar onWaitlistClick={() => setOpen(true)} />
       <main>
         <Hero onJoin={() => setOpen(true)} />
         <Features />
       </main>
       <Footer />
-      <WaitlistModal open={open} onClose={() => setOpen(false)} />
+      <WaitlistModal isOpen={open} onClose={() => setOpen(false)} />
     </div>
   )
 }
