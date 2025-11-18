@@ -1,22 +1,34 @@
 import React from 'react'
+import iconImg from '../assets/icon.png'
 
-export default function Footer(){
+export default function Footer() {
   return (
-    <footer className="site-footer" id="contact">
-      <div className="container footer-inner">
-        <div>
-          <img src={encodeURI('/images/icon.png')} alt="icon" style={{height:36,marginBottom:8}} />
-          <h4>Predictra</h4>
-          <p>AI-powered predictive maintenance for small teams. Built with care by Emerson, Arjan, Daniel, and Justin.</p>
+    <footer className="footer" id="contact">
+      <div className="container footer-content">
+        <div className="footer-brand">
+          <div className="logo">
+            <img src={iconImg} alt="Predictra" />
+            <span>Predictra</span>
+          </div>
+          <p>
+            AI-powered predictive maintenance for small teams. Built with care by Emerson, Arjan, Daniel, and Justin.
+          </p>
         </div>
 
-        <div>
-          <h5>Join waitlist</h5>
-          <p>Be the first to try Predictra — we’ll email you when beta opens.</p>
-          <button className="primary">Join Waitlist</button>
+        <div className="footer-links">
+          <p style={{ fontWeight: 600, marginBottom: '16px' }}>Product</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <a href="#about">About</a>
+            <a href="#features">Features</a>
+            <a href="#">Waitlist</a>
+          </div>
         </div>
       </div>
-      <div className="copyright">© {new Date().getFullYear()} Predictra</div>
+      <div className="container">
+        <div className="copyright" style={{ borderTop: '1px solid var(--border)', paddingTop: '32px' }}>
+          © {new Date().getFullYear()} Predictra. All rights reserved.
+        </div>
+      </div>
     </footer>
   )
 }

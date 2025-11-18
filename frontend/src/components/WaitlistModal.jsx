@@ -1,35 +1,37 @@
 import React, { useState } from 'react'
+import logoImg from '../assets/Logo.png'
+import factoryImg from '../assets/factory photo.png'
 
-export default function WaitlistModal({open, onClose}){
+export default function WaitlistModal({ open, onClose }) {
   const [email, setEmail] = useState('')
   const [status, setStatus] = useState('idle') // idle | loading | success | error
   const [error, setError] = useState('')
 
-  if(!open) return null
+  if (!open) return null
 
-  async function submit(e){
+  async function submit(e) {
     e && e.preventDefault && e.preventDefault()
     setStatus('loading')
     setError('')
-    try{
+    try {
       const res = await fetch('/api/waitlist', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email })
       })
       const data = await res.json()
-      if(!res.ok){
+      if (!res.ok) {
         setStatus('error')
         setError(data && data.error ? data.error : 'Submission failed')
         return
       }
       setStatus('success')
-      setTimeout(()=>{
+      setTimeout(() => {
         setEmail('')
         onClose()
         setStatus('idle')
-      }, 900)
-    }catch(err){
+      }, 2000)
+    } catch (err) {
       console.error(err)
       setStatus('error')
       setError(err && err.message ? err.message : 'Network error')
@@ -37,23 +39,52 @@ export default function WaitlistModal({open, onClose}){
   }
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={e=>e.stopPropagation()}>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={e => e.stopPropagation()}>
         <div className="modal-left">
-          <img src={encodeURI('/images/Logo.png')} alt="Predictra" />
-          <h3>Join the Predictra beta</h3>
-          <p>Enter your email and we'll notify you when we open the beta.</p>
+          <div className="logo" style={{ marginBottom: '24px' }}>
+            <img src={logoImg} alt="Predictra" />
+            <span>Predictra</span>
+          </div>
+          
+          <h2>Join the beta</h2>
+          <p style={{ color: 'var(--text-muted)', marginBottom: '24px' }}>
+            We're opening up spots gradually. Enter your email to get early access.
+          </p>
+
           <form onSubmit={submit}>
-            <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@company.com" />
-            <div className="modal-actions">
-              <button className="primary" type="submit" disabled={status==='loading'}>{status==='loading' ? 'Sending...' : (status==='success' ? 'Sent' : 'Join Waitlist')}</button>
-              <button className="ghost" type="button" onClick={onClose}>Close</button>
+            <div className="input-group">
+              <input 
+                className="input-field"
+                value={email} 
+                onChange={e => setEmail(e.target.value)} 
+                placeholder="name@company.com" 
+                required
+              />
             </div>
+            
+            <div className="modal-actions" style={{ display: 'flex', gap: '12px' }}>
+              <button 
+                className="btn btn-primary" 
+                type="submit" 
+                disabled={status === 'loading' || status === 'success'}
+                style={{ flex: 1 }}
+              >
+                {status === 'loading' ? 'Joining...' : (status === 'success' ? 'Joined!' : 'Join Waitlist')}
+              </button>
+              <button 
+                className="btn btn-ghost" 
+                type="button" 
+                onClick={onClose}
+              >
+                Cancel
+              </button>
+            </div>
+            {status === 'error' && <p style={{ color: 'crimson', marginTop: 10 }}>{error}</p>}
           </form>
-          {status==='error' && <p style={{color:'crimson',marginTop:10}}>{error}</p>}
         </div>
         <div className="modal-right">
-          <img src={encodeURI('/images/factory photo.png')} alt="factory" />
+          <img src={factoryImg} alt="Factory" />
         </div>
       </div>
     </div>

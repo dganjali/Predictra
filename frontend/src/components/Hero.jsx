@@ -1,37 +1,62 @@
 import React from 'react'
 import { motion } from 'framer-motion'
+import factoryImg from '../assets/factory photo.png'
 
-export default function Hero({onJoin}) {
+export default function Hero({ onJoin }) {
   return (
-    <section className="hero" id="about">
-      <div className="hero-left">
-        <motion.h1 initial={{ y: 18, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.08, duration: 0.5 }}>
-          Predictra
-        </motion.h1>
-        <motion.p className="subtitle" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }}>
-          AI-powered predictive maintenance for small and mid-sized manufacturers.
-        </motion.p>
+    <section className="hero-section" id="about">
+      <div className="container hero-content">
+        <div className="hero-text">
+          <motion.h1 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            Predictra
+          </motion.h1>
+          <motion.p 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+          >
+            AI-powered predictive maintenance for small and mid-sized manufacturers.
+          </motion.p>
+          
+          <motion.div 
+            className="hero-stats"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+          >
+            <div className="stat-item">
+              <strong>70%</strong>
+              <span>SMEs lack predictive maintenance</span>
+            </div>
+            <div className="stat-item">
+              <strong>60s+</strong>
+              <span>Avg wait times in impacted locations</span>
+            </div>
+          </motion.div>
 
-        <motion.div className="stats" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.28 }}>
-          <div>
-            <strong>70%</strong>
-            <span>SMEs lack predictive maintenance</span>
-          </div>
-          <div>
-            <strong>60s+</strong>
-            <span>Avg last-year wait times in impacted locations</span>
-          </div>
-        </motion.div>
-
-        <div className="hero-cta">
-          <button className="primary" onClick={onJoin}>Join Waitlist</button>
-          <a className="ghost" href="#features">Learn more</a>
+          <motion.div 
+            className="hero-actions"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.3 }}
+          >
+            <button className="btn btn-primary" onClick={onJoin}>Join Waitlist</button>
+          </motion.div>
         </div>
-      </div>
 
-      <motion.div className="hero-right" initial={{ x: 36, opacity: 0 }} whileInView={{ x: 0, opacity: 1 }} transition={{ delay: 0.2, type: 'spring', stiffness: 90 }}>
-        <img src={encodeURI('/images/factory photo.png')} alt="Factory" />
-      </motion.div>
+        <motion.div 
+          className="hero-image-wrapper"
+          initial={{ opacity: 0, x: 50 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.8, delay: 0.2 }}
+        >
+          <img src={factoryImg} alt="Factory" className="hero-image" />
+        </motion.div>
+      </div>
     </section>
   )
 }
